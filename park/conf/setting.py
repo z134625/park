@@ -31,6 +31,7 @@ from .os import (
     _dir_name,
     _mkdir_path,
 )
+from ..decorator import register, inherit, park
 
 __all__ = (
     'CurrencySetting',
@@ -42,7 +43,6 @@ __all__ = (
     'Date',
     'Stamp',
     "Command",
-    "RecordingMode",
     "SelfStart",
     "RealTimeUpdate",
     "ParkConcurrency",
@@ -53,7 +53,6 @@ __all__ = (
     "install_module",
     "make_dir_or_doc"
 )
-
 
 _NOW_TIME = datetime.datetime.now()
 _NOW_TIME_FORMAT = _NOW_TIME.strftime('%Y-%m-%d %H:%M:%S')
@@ -66,6 +65,7 @@ _cache_path = _path_join(_python_path, "Lib\\site-packages\\park\\cache")
 _command = sys.argv
 
 
+@register(call=True)
 class _CacheClass:
     """
     缓存删除工具，直接调用即可， class_：可以传入字符串，列表，以及路径， all_ 默认为False ，
@@ -135,6 +135,7 @@ class _CacheClass:
         pass
 
 
+@register(call=False)
 class _CurrencySetting:
     log = logging
 
@@ -144,9 +145,15 @@ class _CurrencySetting:
         self.path = None
         self.suffix = None
 
+    def init(self):
+        self.set_dict: dict = {}
+        self.suffix_ini: list = ['.ini', '.cfg', '.conf']
+        self.path = None
+        self.suffix = None
+
     def load(self, path: str, **kwargs):
         """加载配置文件, 支持ini、json、py、txt"""
-        super(_CurrencySetting, self).__init__()
+        self.init()
         self.path: str = path
         _, suffix = _split_path(self.path)
         self.suffix: str = suffix.lower()
@@ -235,7 +242,8 @@ class _CurrencySetting:
         return _get_size(self.path)
 
 
-class _Configs(_CurrencySetting):
+@inherit(parent='_CurrencySetting')
+class _Configs:
     delete = {
 
     }
@@ -290,6 +298,7 @@ class _Configs(_CurrencySetting):
         return self
 
 
+@register(call=False)
 class _ProgressPark:
     """进度条实现
     with ProgressPark(len) as park():
@@ -338,7 +347,8 @@ class _ProgressPark:
         sys.stdout.write("处理耗时:{}\n".format(self.end + 0.1 - 0.1 - self.start))
 
 
-class TrainProgressPark(_ProgressPark):
+@inherit(parent='_ProgressPark')
+class TrainProgressPark:
     batch = 0
     _execute = 0
     _finish = 0
@@ -347,8 +357,7 @@ class TrainProgressPark(_ProgressPark):
 
     def __init__(self, length: int):
         super(TrainProgressPark, self).__init__(length)
-        from ..info.gpu import GPU
-        self.gpu = GPU()
+        self.gpu = park['GPU']
 
     def layer_epoch(self):
         """
@@ -393,18 +402,20 @@ class TrainProgressPark(_ProgressPark):
         self._speed = self._finish + 0.1 - 0.1 - self._execute
         self._total += self._speed
         print("\r", end="")
-        print("[%s]%s -(%.2f) s GPU占用率(%s / %s) GPU温度(%s) 当前 loss=%.8f" % (('>' * progress + '-' * over), progress_str,
-                                                                           self._speed, self.gpu[0]["Used"],
-                                                                           self.gpu[0]["Memory"], self.gpu[0]["Temp"],
-                                                                           kwargs.get('run_loss', 0))
+        print("[%s]%s -(%.2f) s GPU占用率(%s / %s) GPU温度(%s) 当前 loss=%.8f" % (
+        ('>' * progress + '-' * over), progress_str,
+        self._speed, self.gpu[0]["Used"],
+        self.gpu[0]["Memory"], self.gpu[0]["Temp"],
+        kwargs.get('run_loss', 0))
               if self.batch != length else
               "[%s]%s -(%.2f) s GPU占用率(%s / %s) GPU温度(%s) 本次迭代平均 loss=%.8f" % (('>' * 30),
-                                                                               progress_str, (self._total / self.batch),
-                                                                               self.gpu[0]["Used"],
-                                                                               self.gpu[0]["Memory"],
-                                                                               self.gpu[0]["Temp"],
-                                                                               (kwargs.get('total_loss',
-                                                                                           0) / self.batch)),
+                                                                                          progress_str,
+                                                                                          (self._total / self.batch),
+                                                                                          self.gpu[0]["Used"],
+                                                                                          self.gpu[0]["Memory"],
+                                                                                          self.gpu[0]["Temp"],
+                                                                                          (kwargs.get('total_loss',
+                                                                                                      0) / self.batch)),
               end="")
         sys.stdout.flush()
         self._execute = _STAMP()
@@ -418,6 +429,7 @@ class TrainProgressPark(_ProgressPark):
         sys.stdout.write("处理耗时:{}\n".format(self.end + 0.1 - 0.1 - self.start))
 
 
+@register(call=True)
 class _SelfStart:
     _order = '%s\ncd %s\n%s %s'
     _hide_terminal = '@echo off\nif "%1" == "h" goto begin\n' \
@@ -476,6 +488,7 @@ class _SelfStart:
         return False
 
 
+@register
 class _RealTimeUpdate:
     _parent_process_pid = None
     _children_process_pid = None
@@ -583,6 +596,7 @@ class _RealTimeUpdate:
         return self
 
 
+@register(call=True)
 class _ParkConcurrency:
     processList: List[Process] = []
     startProcess: List[Process] = []
@@ -656,6 +670,7 @@ class _ParkConcurrency:
             process.join()
 
 
+@register
 class ParkQueue:
     cache_path = _path_join(_cache_path, "queue")
     cache_data = _path_join(cache_path, f"{_NOW}-queue.json")
@@ -823,6 +838,7 @@ class ParkQueue:
         _remove(self.cache_data)
 
 
+@register
 class ReClass:
     def __init__(self):
         self.pattern = re.compile
@@ -832,6 +848,7 @@ class ReClass:
         self.pattern = self.pattern(kwargs.get("pattern"))
 
 
+@register
 def install_module(module: str, install: str = None) -> int:
     try:
         __import__(module)
@@ -849,6 +866,7 @@ def install_module(module: str, install: str = None) -> int:
             raise ImportError("没有安装module 无法正常使用该模块")
 
 
+@register
 def make_dir_or_doc(path: str, suffix: str = None) -> None:
     basename = _base_name(path=path)
     if suffix and suffix in basename:
@@ -857,14 +875,14 @@ def make_dir_or_doc(path: str, suffix: str = None) -> None:
         _mkdir_path(path=path)
 
 
-CurrencySetting = _CurrencySetting
-ProgressPark = _ProgressPark
+CurrencySetting = park['_CurrencySetting']
+ProgressPark = park['_ProgressPark']
 TrainProgressPark = TrainProgressPark
 setting: _Configs = _Configs()
-Cache = _CacheClass()
-SelfStart = _SelfStart()
-RealTimeUpdate = _RealTimeUpdate
-ParkConcurrency = _ParkConcurrency()
+Cache = park['_CacheClass']
+SelfStart = park['_SelfStart']
+RealTimeUpdate = park['_RealTimeUpdate']
+ParkConcurrency = park['_ParkConcurrency']
 
 Time = _NOW_TIME_FORMAT
 Date = _NOW
@@ -874,4 +892,3 @@ PythonVersion = _python_version
 CachePath = _cache_path
 Command = _command
 
-RecordingMode: str = Date if setting.note_time.value is True or setting.note_time.value is not None else Time

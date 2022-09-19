@@ -1,6 +1,8 @@
 from typing import Any
+from park.decorator import register, park
 
 
+@register(call=False)
 class _GPUClass:
     """
     查看电脑GPU 属性 self.gpu_count 显示电脑GPU数量，
@@ -17,8 +19,11 @@ class _GPUClass:
 
     def __init__(self):
         self.pynvml = __import__("pynvml")
-        self.pynvml.nvmlInit()
-        self.gpu_count = self.pynvml.nvmlDeviceGetCount()
+        try:
+            self.pynvml.nvmlInit()
+            self.gpu_count = self.pynvml.nvmlDeviceGetCount()
+        except self.pynvml.nvml.NVMLError_LibraryNotFound or self.pynvml.nvml.NVMLError_Uninitialized:
+            print('NVML Shared Library Not Found, GPU该功能将无法使用')
 
     def __getattr__(self, item):
         if item.lower() == 'gpu':
@@ -76,7 +81,7 @@ class _GPUClass:
         self.pynvml.nvmlShutdown()
 
 
-GPU = _GPUClass
+GPU = park['_GPUClass']
 
 
 __all__ = ("GPU", )
