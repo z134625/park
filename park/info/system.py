@@ -1,7 +1,9 @@
 
 from typing import Any
+from park.decorator import register, park
 
 
+@register(call=False)
 class _ComputerSystem:
     __slots__ = ["info", "platform"]
 
@@ -50,7 +52,7 @@ class _ComputerSystem:
                 return "没有该内容，请尝试(version(操作系统版本), architecture(操作系统位数), complete(操作系统名称及版本号))"
 
 
-SYS = _ComputerSystem
+SYS = park['_ComputerSystem']
 
 
 __all__ = ("SYS", )
