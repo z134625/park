@@ -1,4 +1,4 @@
-# from park.info.system import SYS
+
 from park.utils import park
 from park.decorator import register, registers
 # from park.conf.setting import setting, Date, Time, Cache
@@ -20,9 +20,9 @@ def sum_number(start, end):
 if __name__ == '__main__':
     # setting.load('./config.json')
     import module
-    registers(module)
+    registers(module, kwargs={'Sum': {'call': True}})
     park = park(exclude=park.EXCLUDE_SYS)
-    park.task('Sum.sum_number')
+    print(park.task('Sum.sum_number', kwargs={'Sum': {'args': 1}}))
     # print(setting.note_time.value)
     # print(Aum().sum_number(1))
 
