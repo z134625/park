@@ -403,10 +403,10 @@ class TrainProgressPark:
         self._total += self._speed
         print("\r", end="")
         print("[%s]%s -(%.2f) s GPU占用率(%s / %s) GPU温度(%s) 当前 loss=%.8f" % (
-        ('>' * progress + '-' * over), progress_str,
-        self._speed, self.gpu[0]["Used"],
-        self.gpu[0]["Memory"], self.gpu[0]["Temp"],
-        kwargs.get('run_loss', 0))
+            ('>' * progress + '-' * over), progress_str,
+            self._speed, self.gpu[0]["Used"],
+            self.gpu[0]["Memory"], self.gpu[0]["Temp"],
+            kwargs.get('run_loss', 0))
               if self.batch != length else
               "[%s]%s -(%.2f) s GPU占用率(%s / %s) GPU温度(%s) 本次迭代平均 loss=%.8f" % (('>' * 30),
                                                                                           progress_str,
@@ -891,4 +891,3 @@ PythonPath = _python_path
 PythonVersion = _python_version
 CachePath = _cache_path
 Command = _command
-
