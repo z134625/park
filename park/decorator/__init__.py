@@ -204,8 +204,15 @@ class _Park(object):
             its = copy.deepcopy(it)
             it = it.split('.')[-1]
             kwargs['module'] = its.replace('.', '_')
-        func_list = list(filter(lambda x: it in x, func_keys))
-        app_list = list(filter(lambda x: it in x or it in dir(self._register_apps[x]['func']),
+
+        def _get_app_name(key):
+            pattern = re.compile(r'([a-zA-Z_]+)_\d+')
+            name = re.search(pattern=pattern, string=key)
+            if name:
+                return name.group(1)
+
+        func_list = list(filter(lambda x: it == _get_app_name(x), func_keys))
+        app_list = list(filter(lambda x: it == _get_app_name(x) or it in dir(self._register_apps[x]['func']),
                                app_keys))
         order_mode = ''
         order_by = 'number'
@@ -410,9 +417,6 @@ class _Park(object):
                 for item in app:
                     if item not in self._app_list:
                         self._app_list.append(item)
-            self._length = len(self._app_list)
-            self._start = 0
-            self._step = 1
             if limit:
                 self._app_list = self._app_list[:int(limit)]
             if module:
@@ -429,6 +433,9 @@ class _Park(object):
                                                  self._app_list))
                 else:
                     self._app_list = app_func_list
+            self._length = len(self._app_list)
+            self._start = 0
+            self._step = 1
 
         def __call__(self, *args, **kwargs):
             if self._app_list.__len__() == 1:
@@ -480,17 +487,18 @@ class _TaskProcess(_Park):
     _func_dict = {}
 
     def _task(self, func, app=None, args=None, mode=0, timing=None):
-        self._func_process_number += 1
         item = func
         if app:
             item = f'{app}.{func}'
-        function = eval(f"self['{item}'].{item.split('.')[-1]}")
-        self._func_dict[str(self._func_process_number)] = {
-            'func': function,
-            'args': args,
-            'mode': mode,
-            'timing': timing,
-        }
+        for obj in self[item]:
+            function = eval(f"obj.{item.split('.')[-1]}")
+            self._func_dict[str(self._func_process_number)] = {
+                'func': function,
+                'args': args,
+                'mode': mode,
+                'timing': timing,
+            }
+            self._func_process_number += 1
 
     def _wait(self):
         res = self._start()
@@ -500,34 +508,37 @@ class _TaskProcess(_Park):
         res = {}
         pool_size = 4
         if self._func_dict:
-            mode_0 = [key if self._func_dict[key]['mode'] == 0 and not self._func_dict[key]['timing'] else ''
-                      for key in self._func_dict.keys()]
-            mode_1 = [key if self._func_dict[key]['mode'] == 1 and not self._func_dict[key]['timing'] else ''
-                      for key in self._func_dict.keys()]
-            mode_2 = [key if self._func_dict[key]['mode'] == 2 and not self._func_dict[key]['timing'] else ''
-                      for key in self._func_dict.keys()]
-            mode_3 = [key if self._func_dict[key]['mode'] == 3 and not self._func_dict[key]['timing'] else ''
-                      for key in self._func_dict.keys()]
-            timing = [key if not self._func_dict[key]['timing'] else ''
-                      for key in self._func_dict.keys()]
+            mode_0 = list(filter(lambda k: self._func_dict[k]['mode'] == 0 and not self._func_dict[k]['timing'],
+                                 self._func_dict.keys()))
+            mode_1 = list(filter(lambda k: self._func_dict[k]['mode'] == 1 and not self._func_dict[k]['timing'],
+                                 self._func_dict.keys()))
+            mode_2 = list(filter(lambda k: self._func_dict[k]['mode'] == 2 and not self._func_dict[k]['timing'],
+                                 self._func_dict.keys()))
+            mode_3 = list(filter(lambda k: self._func_dict[k]['mode'] == 3 and not self._func_dict[k]['timing'],
+                                 self._func_dict.keys()))
+            timing = list(filter(lambda k: isinstance(self._func_dict[k]['timing'], datetime.datetime),
+                                 self._func_dict.keys()))
             if mode_0:
                 res['TASK_NOW'] = {}
                 for key in mode_0:
+                    res['TASK_NOW'][self._func_dict[key]['func'].__name__] = {}
                     res['TASK_NOW'][self._func_dict[key]['func'].__name__]['execute_date'] = \
                         datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     res['TASK_NOW'][self._func_dict[key]['func'].__name__]['result'] = \
                         self._func_dict[key]['func'](*(self._func_dict[key]['args']
                                                        if self._func_dict[key]['args'] else ()))
-            pool = Pool(pool_size)
-            if mode_1:
-                pool.apply_async(func=self._async_func, args=(mode_1,))
-            if mode_2:
-                pool.apply_async(func=self._process_func, args=(mode_2,))
-            if mode_3:
-                pool.apply_async(func=self._thread_func, args=(mode_3,))
+            # pool = Pool(pool_size)
+            # if mode_1:
+            #     pool.apply_async(func=self._async_func, args=(mode_1,))
+            # if mode_2:
+            #     pool.apply_async(func=self._process_func, args=(mode_2,))
+            # if mode_3:
+            #     pool.apply_async(func=self._thread_func, args=(mode_3,))
             if timing:
-                pool.apply_async(func=self._timing_func, args=(timing,))
-
+                self._timing_func(timing=timing)
+                # pool.apply_async(func=self._timing_func, args=(timing,))
+            # pool.close()
+            # pool.join()
         else:
             return True
 
@@ -545,7 +556,27 @@ class _TaskProcess(_Park):
         pass
 
     def _timing_func(self, timing):
-        pass
+        res = []
+        func_dict = {}
+        for key in timing:
+            if self._func_dict[key]['timing'] and isinstance(self._func_dict[key]['timing'], datetime.datetime):
+                time_key = self._func_dict[key]['timing'].strftime('%Y-%m-%d %H:%M:%S')
+                if time_key in func_dict.keys():
+                    func_dict[self._func_dict[key]['timing'].strftime('%Y-%m-%d %H:%M:%S')] += [key]
+                else:
+                    func_dict[self._func_dict[key]['timing'].strftime('%Y-%m-%d %H:%M:%S')] = [key]
+        while True:
+            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            time_list = list(filter(lambda x: now > x, func_dict.keys()))
+            if time_list.__len__() == func_dict.keys().__len__():
+                break
+            if now in func_dict.keys():
+                for k in func_dict[now]:
+                    func = self._func_dict[k]['func']
+                    args = self._func_dict[k]['args']
+                    res.append(func(*(args if args else ())))
+                    func_dict[now].remove(k)
+        return res
 
 
 class Park(_TaskProcess):
@@ -625,20 +656,21 @@ class Park(_TaskProcess):
             else:
                 self._register_function(func=apps, **kwargs)
 
-    def tasks(self, apps, **kwargs):
-        if isinstance(apps, Iterable):
+    def tasks(self, apps, kwargs):
+        if not isinstance(apps, str) and isinstance(apps, Iterable):
             for app in apps:
                 name = app.split('.')
                 func = name[-1]
-                app = name[:-1]
+                app = '.'.join(name[:-1])
                 kw = kwargs.get(app, {})
                 self._task(func=func, app=app, args=kw.get('args', None),
                            mode=kw.get('mode', 0), timing=kw.get('timing', False))
         else:
-            name = apps.split('.')[0]
+            name = apps.split('.')
             func = name[-1]
-            app = name[:-1]
-            kw = kwargs.get(app, {})
+            app = '.'.join(name[:-1])
+
+            kw = kwargs.get(app or func, {})
             self._task(func=func, app=app, args=kw.get('args', None),
                        mode=kw.get('mode', 0), timing=kw.get('timing', False))
         return self._wait()
