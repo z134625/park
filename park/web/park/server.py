@@ -2,8 +2,10 @@
 from wsgiref.simple_server import make_server
 from ...conf.os import isExists
 from ...utils.data import RenderData
+from ...decorator import register
 
 
+@register
 def render(html: str = None, status: int = 200):
     if isExists(html):
         with open(html, 'r') as f:
@@ -12,6 +14,7 @@ def render(html: str = None, status: int = 200):
         raise FileNotFoundError("该文件(%s)不存在， File is not found" % html)
 
 
+@register
 def start(function, host: str = 'localhost', port: int = 8888):
     """
     :param function:
