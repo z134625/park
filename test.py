@@ -1,40 +1,38 @@
 import datetime
-from park.utils import park
-from park.decorator import register, registers
+from park.decorator import register, registers, park, Park
 from park.web.park import ParkWeb
-
+from park.decorator.encryption import encryption, EncryptionData
 # from park.conf.setting import setting, Date, Time, Cache
 web = ParkWeb()
+
+
 @register
 def sum_number(a):
     print(a)
 
-# @inherit(parent='Sum')
-# class Aum:
-#     def sums(self):
-#         return self.end
+
+class Aum:
+    end = 1000
+
+    def __init__(self, num, key):
+        pass
+
+    @encryption(mode=2)
+    def sums(self):
+        return self.end
+
+
 if __name__ == '__main__':
     # setting.load('./config.json')
     import module
-    registers(module, kwargs={'Sum': {'call': True}})
-    park = park()
-    print(park.all)
-    print(park[1])
+    aum = registers([module, Aum], kwargs='./co.json')[0]
+    res = aum.sums()
+    print(res)
+    # a = park(exclude=park.EXCLUDE_DEFAULT)
+    print(park['sum_numbers'](1, 100))
     print(park.tasks(['sum_number', 'sum_numbers'],
-                     kwargs={
-                         'args': 1,
-                         'this': {
-                             'args': {
-                                 'a': 'dd'
-                             }
-                         },
-                         'module.Sum': {
-                             'args': 'pp',
-                             'timing': datetime.datetime(2022, 9, 26, 20, 30, 00)
-                         },
-                         'module.sum_numbers': {
-                             'args': (1, 100)
-                         }
-                     }))
-    # print(setting.note_time.value)
-    # print(Aum().sum_number(1))
+                     kwargs='./config.json'))
+    k = Park()
+
+    print(k.all)
+    print(park.all)
