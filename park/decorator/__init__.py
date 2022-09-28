@@ -15,14 +15,24 @@ class _AppsFunc:
     """
     每一个注册的应用重新包装的函数，以便进行统一的排序、属性
     """
-    def __init__(self, obj: dict):
-        self._app = obj['func']
-        self._obj = obj['func_obj']
-        self._args = obj['args']
-        self._info = obj['info']
-        self._number = obj['number']
-        self._create_time = obj['create_time']
-        self._func = dir(self._obj) if self._obj else dir(self._app)
+
+    def __init__(self, obj, args=None):
+        if isinstance(obj, dict):
+            self._app = obj['func']
+            self._obj = obj['func_obj']
+            self._args = obj['args']
+            self._info = obj['info']
+            self._number = obj['number']
+            self._create_time = obj['create_time']
+            self._func = dir(self._obj) if self._obj else dir(self._app)
+        elif isclass(obj) or isfunction(obj):
+            self._app = obj
+            self._obj = None
+            self._args = args
+            self._info = {'module': obj.__module__, 'name': obj.__name__, 'doc': obj.__doc__}
+            self._number = None
+            self._create_time = datetime.datetime.now()
+            self._func = dir(self._obj) if self._obj else dir(self._app)
 
     def __call__(self, *args, **kwargs):
         if callable(self._app) and (not self._obj or (args or kwargs)):
@@ -118,7 +128,8 @@ class _AppList:
             else:
                 for item in app:
                     if item not in self._app_list:
-                        self._app_list.append(item)
+                        if isinstance(item, _AppsFunc):
+                            self._app_list.append(item)
             if limit:
                 self._app_list = self._app_list[:int(limit)]
             if module:
@@ -191,10 +202,10 @@ class _Park(object):
     应用注册、应用继承的核心类， 记录模块自带已注册应用，每个注册都有编号，自定义注册将在这些已注册应用后
     """
     _register_number = 0
-    _exclude_apps = ['_CacheClass_0', '_CurrencySetting_1', '_ProgressPark_2', '_SelfStart_3',
-                     '_RealTimeUpdate_4', '_ParkConcurrency_5', 'ParkQueue_6', 'ReClass_7',
-                     '_ComputerSystem_10', '_GPUClass_11', 'EncryptionData_14']
-    _exclude_func = ['install_module_8', 'make_dir_or_doc_9', 'render_12', 'start_13', 'encryption_15']
+    _exclude_func = ['install_module', 'make_dir_or_doc', 'render', 'start', 'encryption', '_CacheClass',
+                     '_CurrencySetting', '_ProgressPark', '_SelfStart',
+                     '_RealTimeUpdate', '_ParkConcurrency', 'ParkQueue', 'ReClass',
+                     '_ComputerSystem', '_GPUClass', 'EncryptionData']
 
     def __init__(self, exclude=3, order='number', limit=None, *args, **kwargs):
         self._exclude_mode = exclude
@@ -386,18 +397,36 @@ class _Park(object):
                     return self.func[item]
                 else:
                     super(NewClass, self).__getattr__(item)
-        return NewClass(app_args=app_arg if app_arg else ())
+
+        return _AppsFunc(NewClass, args={'app_args': app_arg if app_arg else ()})
 
     def _get_exclude_list(self):
         func_keys = self._register_funcs.keys()
         app_keys = self._register_apps.keys()
+        func_key = []
+        app_key = []
         if self._exclude_mode == 1:
-            func_keys = list(set(func_keys).difference(set(self._exclude_func)))
-            app_keys = list(set(app_keys).difference(set(self._exclude_apps)))
+            for key_f in func_keys:
+                key = re.search(r'(.*)_\d+', key_f).group(1)
+                if key not in self._exclude_func:
+                    func_key.append(key_f)
+            for key_a in app_keys:
+                key = re.search(r'(.*)_\d+', key_a).group(1)
+                if key not in self._exclude_func:
+                    app_key.append(key_a)
         elif self._exclude_mode == 2:
-            func_keys = list(set(func_keys).intersection(set(self._exclude_func)))
-            app_keys = list(set(app_keys).intersection(set(self._exclude_apps)))
-        return func_keys, app_keys
+            for key_f in func_keys:
+                key = re.search(r'(.*)_\d+', key_f).group(1)
+                if key not in self._exclude_func:
+                    func_key.append(key_f)
+            for key_a in app_keys:
+                key = re.search(r'(.*)_\d+', key_a).group(1)
+                if key not in self._exclude_func:
+                    app_key.append(key_a)
+        else:
+            func_key = list(func_keys)
+            app_key = list(app_keys)
+        return func_key, app_key
 
     def __getitem__(self, item):
         func_keys, app_keys = self._get_exclude_list()
@@ -634,24 +663,28 @@ class _TaskProcess(_Park):
                                  self._func_dict.keys()))
             if mode_0:
                 res['TASK_NOW'] = {}
+                number = 0
                 for key in mode_0:
+                    number += 1
                     args = self._func_dict[key]['args']
                     if isinstance(args, str) and self._func_dict[key]['source']:
                         try:
                             args = eval(args)
                         except NameError:
                             args = args
-                    res['TASK_NOW'][self._func_dict[key]['func'].__name__] = {}
-                    res['TASK_NOW'][self._func_dict[key]['func'].__name__]['execute_date'] = \
+                    name = self._func_dict[key]['func'].__name__
+                    module = self._func_dict[key]['func'].__module__
+                    res['TASK_NOW'][module + f'-{name}'] = {}
+                    res['TASK_NOW'][module + f'-{name}']['execute_date'] = \
                         datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     if isinstance(args, dict):
-                        res['TASK_NOW'][self._func_dict[key]['func'].__name__]['result'] = \
+                        res['TASK_NOW'][module + f'-{name}']['result'] = \
                             self._func_dict[key]['func'](**args)
                     elif isinstance(args, tuple) or isinstance(args, list):
-                        res['TASK_NOW'][self._func_dict[key]['func'].__name__]['result'] = \
+                        res['TASK_NOW'][module + f'-{name}']['result'] = \
                             self._func_dict[key]['func'](*args)
                     else:
-                        res['TASK_NOW'][self._func_dict[key]['func'].__name__]['result'] = \
+                        res['TASK_NOW'][module + f'-{name}']['result'] = \
                             self._func_dict[key]['func'](args)
             if timing:
                 self._timing_func(timing=timing, _func_dict=self._func_dict)
@@ -810,20 +843,25 @@ class Park(_TaskProcess):
                 if type(eval(f'apps.{func}')).__name__ != 'module':
                     res += self._register_function(func=eval(f'apps.{func}'), **kwargs)
         else:
-            if not isinstance(apps, str) and isinstance(apps, Iterable):
-                for app in apps:
-                    if type(app).__name__ == 'module':
-                        index_app = dir(app).index('__builtins__')
-                        index_func = dir(app).index('__spec__')
-                        funcs = dir(app)[:index_app] + dir(app)[index_func + 1:]
-                        for func in funcs:
-                            if type(eval(f'app.{func}')).__name__ != 'module':
-                                res += self._register_function(func=eval(f'app.{func}'), **kwargs)
-                    else:
-                        res += self._register_function(func=app, **kwargs)
+            if isinstance(apps, Iterable):
+                if isinstance(apps, str):
+                    raise
+                else:
+                    for app in apps:
+                        if type(app).__name__ == 'module':
+                            index_app = dir(app).index('__builtins__')
+                            index_func = dir(app).index('__spec__')
+                            funcs = dir(app)[:index_app] + dir(app)[index_func + 1:]
+                            for func in funcs:
+                                if type(eval(f'app.{func}')).__name__ != 'module':
+                                    res += self._register_function(func=eval(f'app.{func}'), **kwargs)
+                        elif isinstance(app, str):
+                            raise
+                        else:
+                            res += self._register_function(func=app, **kwargs)
             else:
                 res += self._register_function(func=apps, **kwargs)
-        return res
+        return _AppList(res)
 
     def tasks(self, apps, kwargs=None):
         if kwargs is None:

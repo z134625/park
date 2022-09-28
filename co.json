@@ -1,11 +1,10 @@
 {
+  "args": "()",
   "Sum": {
     "call": true
   },
   "Aum": {
     "inherit": "Sum",
-    "mode": 1,
-    "args": {
-      "key": 2,
-      "num": 22
-    }}}
+    "mode": 1
+
+}}

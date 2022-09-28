@@ -12,5 +12,9 @@
      "sum_numbers": {
          "args": "(1, 100)"
 
+     },
+    "this.Aum": {
+         "args": "(1, 100)"
+
      }
  }
