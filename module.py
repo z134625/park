@@ -21,7 +21,7 @@ class Sum:
         print(k)
 
     def sums(self):
-        return 100
+        return self.end
 
 
 del re

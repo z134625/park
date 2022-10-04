@@ -109,7 +109,8 @@ class EncryptionData(object):
         encrypt_aes_64 = base64.b64encode(encrypt_aes)
         return encrypt_aes_64
 
-    def decrypt_data(self, data, mode=None, key=None, timeout_key=None):
+    def decrypt_data(self, data=None, mode=None, key=None, timeout_key=None):
+        data = data if data else self.result
         if mode or self.mode in [0, 1]:
             raise ValueError('md5 or sha1 不支持解密')
         elif mode or self.mode == 2:

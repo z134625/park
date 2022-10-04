@@ -27,7 +27,7 @@ class _AppsFunc:
             self._func = dir(self._obj) if self._obj else dir(self._app)
         elif isclass(obj) or isfunction(obj):
             self._app = obj
-            self._obj = None
+            self._obj = obj(**args) if args else obj()
             self._args = args
             self._info = {'module': obj.__module__, 'name': obj.__name__, 'doc': obj.__doc__}
             self._number = None
@@ -114,7 +114,14 @@ class _AppsFunc:
         elif item == self._app.__name__:
             return self._app
         else:
-            raise AttributeError(f'{str(self.__class__.__name__)} not have this attr')
+            try:
+                if self._obj:
+                    attr = eval(f'self._obj.{item}')
+                else:
+                    attr = eval(f'self._app.{item}')
+                return attr
+            except AttributeError:
+                raise AttributeError(f'{str(self.__class__.__name__)} not have this attr')
 
 
 class _AppList:
@@ -202,6 +209,7 @@ class _Park(object):
     应用注册、应用继承的核心类， 记录模块自带已注册应用，每个注册都有编号，自定义注册将在这些已注册应用后
     """
     _register_number = 0
+    _registered_number = []
     _exclude_func = ['install_module', 'make_dir_or_doc', 'render', 'start', 'encryption', '_CacheClass',
                      '_CurrencySetting', '_ProgressPark', '_SelfStart',
                      '_RealTimeUpdate', '_ParkConcurrency', 'ParkQueue', 'ReClass',
@@ -243,10 +251,11 @@ class _Park(object):
             if isclass(func):
                 self._register_apps[name + '_' + str(self._register_number)] = result
                 self._register_number += 1
+                self._registered_number.append(self._register_number)
             elif isfunction(func):
-
                 self._register_funcs[name + '_' + str(self._register_number)] = result
                 self._register_number += 1
+                self._registered_number.append(self._register_number)
 
             def wrapper(*args, **kwargs):
                 return func(*args, **kwargs)
@@ -287,9 +296,11 @@ class _Park(object):
                 if isclass(func_call):
                     self._register_apps[func_name + '_' + str(self._register_number)] = func_result
                     self._register_number += 1
+                    self._registered_number.append(self._register_number)
                 elif isfunction(func_call):
                     self._register_funcs[func_name + '_' + str(self._register_number)] = func_result
                     self._register_number += 1
+                    self._registered_number.append(self._register_number)
 
                 def warp(*args, **kwargs):
                     return func_obj(*args, **kwargs)
@@ -398,7 +409,7 @@ class _Park(object):
                 else:
                     super(NewClass, self).__getattr__(item)
 
-        return _AppsFunc(NewClass, args={'app_args': app_arg if app_arg else ()})
+        return _AppsFunc(NewClass, args={'app_args': app_arg if app_arg else {}})
 
     def _get_exclude_list(self):
         func_keys = self._register_funcs.keys()
@@ -692,19 +703,6 @@ class _TaskProcess(_Park):
         else:
             return True
 
-    def _process_func(self, mode_2):
-        pool1 = Pool(2)
-        for key in mode_2:
-            pool1.apply_async(self._func_dict[key]['func'], args=(self._func_dict[key]['args']
-                                                                  if self._func_dict[key]['args'] else None))
-        pool1.close()
-
-    def _async_func(self, mode_1):
-        pass
-
-    def _thread_func(self, mode_3):
-        pass
-
     @staticmethod
     def _timing_func(timing, _func_dict):
         res = []
@@ -738,14 +736,6 @@ class _TaskProcess(_Park):
                         res.append(func(args))
                     func_dict[now].remove(k)
         return res
-
-    @staticmethod
-    def call_back(res):
-        print(f'Hello,World! {res}')
-
-    @staticmethod
-    def err_call_back(err):
-        print(f'出错啦~ error：{str(err)}')
 
 
 class Park(_TaskProcess):
@@ -823,9 +813,11 @@ class Park(_TaskProcess):
             if isclass(func):
                 self._register_apps[func_name + '_' + str(self._register_number)] = func_result
                 self._register_number += 1
+                self._registered_number.append(self._register_number)
             elif isfunction(func):
                 self._register_funcs[func_name + '_' + str(self._register_number)] = func_result
                 self._register_number += 1
+                self._registered_number.append(self._register_number)
         return inherit_apps
 
     def register(self, apps, kwargs=None):

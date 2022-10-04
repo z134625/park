@@ -25,14 +25,13 @@ if __name__ == '__main__':
     import module
 
     aum = registers([module, Aum], kwargs='./co.json')
-    print(aum.sums)
+    print(aum.sums__parent())
     park(exclude=park.EXCLUDE_SYS)
     print(park['sum_numbers'](1, 100))
     a = park.tasks(['sum_number', 'sum_numbers', 'sums'],
                    kwargs='./config.json')
     print(a)
-    # print(a['park.decorator.encryption-warp']['result'].resu)
     k = Park()
 
     print(park.all)
-    print(park.all)
+    print(k.all)
