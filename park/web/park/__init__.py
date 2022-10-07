@@ -1,5 +1,7 @@
 from ...utils.data import RequestInfo, RenderData
 from ...conf.setting import Command
+from . import server
+from ...decorator import park
 
 
 class ParkWeb:
@@ -47,9 +49,9 @@ class ParkWeb:
             return [self.not_found.encode('utf-8')]
 
     def start(self, port: int = 8888):
-        from .server import start
+
         port = int(port)
         if '--port' in Command or '-p' in Command:
             port_index = Command.index("--port") if '--port' in Command else Command.index("-p")
             port = int(Command[port_index + 1])
-        start(self._application, port=port)
+        park['server.start'](self._application, port=port)
