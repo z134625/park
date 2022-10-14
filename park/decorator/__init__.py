@@ -99,7 +99,7 @@ class _AppsFunc:
             return self._info['module']
         elif item == 'value':
             return self._obj
-        elif item == '_name':
+        elif item == '_name' and item not in self._func:
             return self._app.__name__
         elif item == '_number':
             return self._number
@@ -264,13 +264,13 @@ class _Park(object):
         else:
             def wrapper(func_call):
                 is_call = call
+                inherit_ = kwarg.get('inherit', False)
                 func_arg = kwarg.get('arg', tuple())
                 func_name = func_call.__name__
                 if hasattr(func_call, '_name'):
                     func_name = func_call._name
 
                 func_obj = None
-
                 if is_call and func_arg:
                     if isinstance(func_arg, dict):
                         func_obj = func_call(**func_arg)
@@ -314,6 +314,7 @@ class _Park(object):
             parent = kwarg.get('parent', None)
             number = kwarg.get('number', None)
             warn = kwarg.get('warn', False)
+            register_ = kwarg.get('register', True)
             assert parent, '必须指定父类'
             app = self[parent]
             if isinstance(app, list) and app.__len__() > 1 and not number:
@@ -326,9 +327,18 @@ class _Park(object):
             if isinstance(number, int):
                 app = self[parent][number]
             app_arg = app._args
+            call = app._obj
             app = app._app
             if not isclass(app):
                 raise ValueError('(%s) 方法不支持继承函数使用该装饰器(inherit)' % func.__name__)
+
+            if register_:
+                arg = kwarg.get('args', None)
+                obj, arg = self._inherit_func_inner(func, app, args=arg, app_arg=app_arg, call=call)
+                self.register(obj, kwargs={
+                    'call': True if arg else False,
+                    'args': arg
+                })
 
             def warp(*args, **kwargs):
                 return self._inherit_func(func, app, args=(args, kwargs), app_arg=app_arg)
@@ -337,7 +347,11 @@ class _Park(object):
 
         return wrapper
 
-    def _inherit_func(self, func, app, args, app_arg):
+    def _inherit_func(self, func, app, args, app_arg, call=None):
+        obj, arg = self._inherit_func_inner(func, app, args, app_arg, call=call)
+        return _AppsFunc(obj, arg)
+
+    def _inherit_func_inner(self, func, app, args, app_arg, call):
         parent_class = (object,)
         if isclass(func) and isclass(app):
             parent_class = (func, app)
@@ -351,6 +365,13 @@ class _Park(object):
             func = {}
 
             def __init__(self, app_args):
+                if call:
+                    self.app_init(app_args)
+                self._sub_args = args
+                if self._sub_args:
+                    self.sub_init()
+
+            def app_init(self, app_args):
                 if app_args and isclass(app):
                     if app_args.__len__() == 2 and isinstance(app_args[0], tuple) and isinstance(app_args[1], dict):
                         self._parent_app = app(self, *app_args[0], **app_args[1])
@@ -364,16 +385,19 @@ class _Park(object):
                     self._parent_app = app()
                 elif isfunction(app):
                     self._parent_func[app.__name__] = app
-                if args and isclass(func):
-                    if isinstance(args, dict):
-                        self._sub_app = func(**args)
-                    elif args.__len__() == 2 and isinstance(args[0], tuple) and isinstance(args[1], dict):
-                        self._sub_app = func(*args[0], **args[1])
-                    elif not isinstance(args, str) and isinstance(args, Iterable):
-                        self._sub_app = func(*args)
+
+            def sub_init(self):
+                if self._sub_args and isclass(func):
+                    if isinstance(self._sub_args, dict):
+                        self._sub_app = func(**self._sub_args)
+                    elif self._sub_args.__len__() == 2 and isinstance(self._sub_args[0], tuple) \
+                            and isinstance(self._sub_args[1], dict):
+                        self._sub_app = func(*self._sub_args[0], **self._sub_args[1])
+                    elif not isinstance(self._sub_args, str) and isinstance(self._sub_args, Iterable):
+                        self._sub_app = func(*self._sub_args)
                     else:
-                        self._sub_app = func(args)
-                elif not args and isclass(func):
+                        self._sub_app = func(self._sub_args)
+                elif not self._sub_args and isclass(func):
                     self._sub_app = func()
                 elif isfunction(func):
                     self._sub_func[func.__name__] = func
@@ -409,7 +433,122 @@ class _Park(object):
                 else:
                     super(NewClass, self).__getattr__(item)
 
-        return _AppsFunc(NewClass, args={'app_args': app_arg if app_arg else {}})
+            @classmethod
+            def _generate_name(cls):
+                cls._name = func.__name__
+
+        NewClass._generate_name()
+
+        return NewClass, {'app_args': app_arg if app_arg else {}}
+
+    def _register_function(self, func=None, **kwarg):
+        inherit_apps = []
+        func_name = func.__name__
+        if hasattr(func, '_name'):
+            func_name = func._name
+        func_kwargs = kwarg.get(func.__name__, {}) or kwarg.get(func_name, {})
+        is_call = func_kwargs.get('call', False)
+        func_arg = func_kwargs.get('args', tuple())
+        if isinstance(func_arg, str) and self._func_dict['_data_source']:
+            try:
+                func_arg = eval(func_arg)
+            except NameError:
+                func_arg = func_arg
+        register_mode = func_kwargs.get('mode', 0)
+        if register_mode == 1:
+            number = func_kwargs.get('number', None)
+            inherit_app = self[func_kwargs.get('inherit', '')]
+            if inherit_app.__len__() > 1 and not number:
+                app = inherit_app[0]
+            else:
+                app = inherit_app
+            if isinstance(number, int):
+                app = self[inherit_app][number]
+            app_arg = app._args
+            if isinstance(app_arg, str) and self._func_dict['_data_source']:
+                try:
+                    app_arg = eval(app_arg)
+                except NameError:
+                    app_arg = app_arg
+            app = app._app
+            if not isclass(app):
+                raise ValueError('(%s) 方法不支持继承函数使用该装饰器(inherit)' % func.__name__)
+
+            inherit_apps.append(self._inherit_func(func=func, app=app, app_arg=app_arg, args=func_arg))
+        else:
+            func_obj = None
+            if is_call and func_arg:
+                if isinstance(func_arg, dict):
+                    func_obj = func(**func_arg)
+                elif isinstance(func_arg, tuple) or isinstance(func_arg, list):
+                    func_obj = func(*func_arg)
+                else:
+                    func_obj = func(func_arg)
+            elif is_call:
+                func_obj = func()
+            func_result = {
+                'number': self._register_number,
+                'func': func,
+                'func_obj': func_obj,
+                'args': func_arg,
+                'info': {
+                    'module': func.__module__ if func.__module__ != '__main__' else 'this',
+                    'doc': func.__doc__,
+                    'name': func.__name__,
+                },
+                'create_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'process': None,
+            }
+            if isclass(func):
+                self._register_apps[func_name + '_' + str(self._register_number)] = func_result
+                self._register_number += 1
+                self._registered_number.append(self._register_number)
+            elif isfunction(func):
+                self._register_funcs[func_name + '_' + str(self._register_number)] = func_result
+                self._register_number += 1
+                self._registered_number.append(self._register_number)
+        return inherit_apps
+
+    def register(self, apps, kwargs=None):
+        res = []
+        if kwargs is None:
+            kwargs = {}
+        elif isinstance(kwargs, str):
+            kwargs = self._load_json(kwargs)
+            kwargs['_data_source'] = True
+        if type(apps).__name__ == 'module':
+            index_app = dir(apps).index('__builtins__')
+            index_func = dir(apps).index('__spec__')
+            funcs = dir(apps)[:index_app] + dir(apps)[index_func + 1:]
+            for func in funcs:
+                if type(eval(f'apps.{func}')).__name__ != 'module':
+                    res += self._register_function(func=eval(f'apps.{func}'), **kwargs)
+        else:
+            if isinstance(apps, Iterable):
+                if isinstance(apps, str):
+                    raise
+                else:
+                    for app in apps:
+                        if type(app).__name__ == 'module':
+                            index_app = dir(app).index('__builtins__')
+                            index_func = dir(app).index('__spec__')
+                            funcs = dir(app)[:index_app] + dir(app)[index_func + 1:]
+                            for func in funcs:
+                                if type(eval(f'app.{func}')).__name__ != 'module':
+                                    res += self._register_function(func=eval(f'app.{func}'), **kwargs)
+                        elif isinstance(app, str):
+                            raise
+                        else:
+                            res += self._register_function(func=app, **kwargs)
+            else:
+                func_name = apps.__name__
+                if hasattr(apps, '_name'):
+                    func_name = apps._name
+                app_kw = kwargs.get(apps.__name__, {}) or kwargs.get(func_name, {})
+                if not app_kw:
+                    kwargs = {apps.__name__: kwargs}
+                res += self._register_function(func=apps, **kwargs)
+        return _AppList(res)
 
     def _get_exclude_list(self):
         func_keys = self._register_funcs.keys()
@@ -730,6 +869,7 @@ class _TaskProcess(_Park):
                             args = args
                     if isinstance(args, dict):
                         res.append(func(**args))
+
                     elif isinstance(args, list) or isinstance(args, tuple):
                         res.append(func(*args))
                     else:
@@ -751,109 +891,6 @@ class Park(_TaskProcess):
         self._order_by = order
         self._limit = limit
         return self
-
-    def _register_function(self, func=None, **kwarg):
-        inherit_apps = []
-        func_name = func.__name__
-        if hasattr(func, '_name'):
-            func_name = func._name
-        func_kwargs = kwarg.get(func.__name__, {}) or kwarg.get(func_name, {})
-        is_call = func_kwargs.get('call', False)
-        func_arg = func_kwargs.get('args', tuple())
-        if isinstance(func_arg, str) and self._func_dict['_data_source']:
-            try:
-                func_arg = eval(func_arg)
-            except NameError:
-                func_arg = func_arg
-        register_mode = func_kwargs.get('mode', 0)
-        if register_mode == 1:
-            number = func_kwargs.get('number', None)
-            inherit_app = self[func_kwargs.get('inherit', '')]
-            if inherit_app.__len__() > 1 and not number:
-                app = inherit_app[0]
-            else:
-                app = inherit_app
-            if isinstance(number, int):
-                app = self[inherit_app][number]
-            app_arg = app._args
-            if isinstance(app_arg, str) and self._func_dict['_data_source']:
-                try:
-                    app_arg = eval(app_arg)
-                except NameError:
-                    app_arg = app_arg
-            app = app._app
-            if not isclass(app):
-                raise ValueError('(%s) 方法不支持继承函数使用该装饰器(inherit)' % func.__name__)
-
-            inherit_apps.append(self._inherit_func(func=func, app=app, app_arg=app_arg, args=func_arg))
-        else:
-            func_obj = None
-            if is_call and func_arg:
-                if isinstance(func_arg, dict):
-                    func_obj = func(**func_arg)
-                elif isinstance(func_arg, tuple) or isinstance(func_arg, list):
-                    func_obj = func(*func_arg)
-                else:
-                    func_obj = func(func_arg)
-            elif is_call:
-                func_obj = func()
-            func_result = {
-                'number': self._register_number,
-                'func': func,
-                'func_obj': func_obj,
-                'args': func_arg,
-                'info': {
-                    'module': func.__module__ if func.__module__ != '__main__' else 'this',
-                    'doc': func.__doc__,
-                    'name': func.__name__,
-                },
-                'create_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'process': None,
-            }
-            if isclass(func):
-                self._register_apps[func_name + '_' + str(self._register_number)] = func_result
-                self._register_number += 1
-                self._registered_number.append(self._register_number)
-            elif isfunction(func):
-                self._register_funcs[func_name + '_' + str(self._register_number)] = func_result
-                self._register_number += 1
-                self._registered_number.append(self._register_number)
-        return inherit_apps
-
-    def register(self, apps, kwargs=None):
-        res = []
-        if kwargs is None:
-            kwargs = {}
-        elif isinstance(kwargs, str):
-            kwargs = self._load_json(kwargs)
-            kwargs['_data_source'] = True
-        if type(apps).__name__ == 'module':
-            index_app = dir(apps).index('__builtins__')
-            index_func = dir(apps).index('__spec__')
-            funcs = dir(apps)[:index_app] + dir(apps)[index_func + 1:]
-            for func in funcs:
-                if type(eval(f'apps.{func}')).__name__ != 'module':
-                    res += self._register_function(func=eval(f'apps.{func}'), **kwargs)
-        else:
-            if isinstance(apps, Iterable):
-                if isinstance(apps, str):
-                    raise
-                else:
-                    for app in apps:
-                        if type(app).__name__ == 'module':
-                            index_app = dir(app).index('__builtins__')
-                            index_func = dir(app).index('__spec__')
-                            funcs = dir(app)[:index_app] + dir(app)[index_func + 1:]
-                            for func in funcs:
-                                if type(eval(f'app.{func}')).__name__ != 'module':
-                                    res += self._register_function(func=eval(f'app.{func}'), **kwargs)
-                        elif isinstance(app, str):
-                            raise
-                        else:
-                            res += self._register_function(func=app, **kwargs)
-            else:
-                res += self._register_function(func=apps, **kwargs)
-        return _AppList(res)
 
     def tasks(self, apps, kwargs=None):
         if kwargs is None:

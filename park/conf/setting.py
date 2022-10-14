@@ -242,8 +242,9 @@ class _CurrencySetting:
         return _get_size(self.path)
 
 
-@inherit(parent='_CurrencySetting')
+@inherit(parent='_CurrencySetting', register=True)
 class _Configs:
+    _name = '_Configs'
     delete = {
 
     }
@@ -322,7 +323,6 @@ class _ProgressPark:
         func = kwargs.get("func", None)
         if func:
             print(f"{self.epoch}." + start_msg + '\r', end="", flush=True)
-            sys.stdout.flush()
             try:
                 func()
                 print(f"{self.epoch}." + end_msg)
@@ -347,7 +347,7 @@ class _ProgressPark:
         sys.stdout.write("处理耗时:{}\n".format(self.end + 0.1 - 0.1 - self.start))
 
 
-@inherit(parent='_ProgressPark')
+@inherit(parent='_ProgressPark', register=True)
 class TrainProgressPark:
     batch = 0
     _execute = 0
