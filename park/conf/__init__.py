@@ -3,7 +3,7 @@ import re
 from ._error import *
 
 
-__all__ = ("Error", "recursion", "exists_rename")
+__all__ = ("Error", "exists_rename")
 __doc__ = """    'BASE_PATH': 当前工作路径
     'Time': 现在时间格式xxxx-xx-xx : xx:xx:xx xx
     'Date',  现在时间格式 xxxx-xx-xx
@@ -91,37 +91,54 @@ class _ErrorClass:
         return EpochError(msg)
 
 
-def recursion(path):
-    from .os import isExists
-    old_path = path
-    if isExists(old_path):
-        pattern1 = re.compile(r'.*?\(\d+\).pth')
-        old_path = re.search(pattern1, old_path)
-        if old_path:
-            old_path = old_path.group()
-        if not old_path:
-            old_path = path.replace('.pth', '(1).pth')
-        if isExists(old_path):
-            pattern2 = re.compile(r'\((\d+)\).pth')
-            n = int(re.search(pattern2, old_path).group(1)) + 1
-            old_path = re.sub(r'\(\d+\).pth', f'({n}).pth', old_path)
-            return recursion(old_path)
-    return old_path
-
-
-def exists_rename(name: str) -> str:
-    from .os import isExists
-    old = name
-    pattern1 = re.compile(r'.*?\((\d+?)\)')
-    is_exists = re.match(pattern1, old)
-    if is_exists:
-        number = is_exists.group(1)
-        new_name = re.sub(r'\(%s\)' % number, '(%d)' % (int(number) + 1), old)
+def exists_rename(path: str, paths: list = None) -> str:
+    from .os import isType, listPath, dirName, base, join
+    if isType(path=path, form='dir'):
+        if path.endswith('/'):
+            path = path[:-1]
+        names = listPath(path=dirName(path), splicing=False, list=True)
+        return join(dirName(path), _generate_name(name=base(path), names=names))
+    if isType(path=path, form='doc'):
+        names = listPath(path=dirName(path), splicing=False, list=True)
+        return join(dirName(path), _generate_name(name=base(path), names=names, mode=1))
     else:
-        new_name = old + '(1)'
+        names = []
+        if paths:
+            names = paths
+        return _generate_name(name=path, names=names)
 
-    return new_name
+
+def _generate_name(name: str, names: list, mode=0) -> str:
+    suffix = ''
+    if mode == 1:
+        from .os import splitPath, absPath
+        name, suffix = splitPath(name)
+        names = list(map(lambda x: splitPath(x)[0], filter(lambda x: splitPath(x)[1] == suffix, names)))
+    if name in names:
+        pattern = re.compile(r'.*\((\d+)\)')
+        number = re.match(pattern=pattern, string=name)
+        if number:
+            number = number.group(1)
+            new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
+        else:
+            new_name = name + ' (1)'
+        if new_name in names:
+            return _generate_name(new_name, names)
+        return new_name + suffix
+    return name + suffix
 
 
 Error = _ErrorClass
 
+del _ErrorClass,\
+    UnknownError,\
+    SettingError,\
+    DataError, \
+    SaveError,\
+    SQLError, \
+    DataPathError,\
+    NetworkError, \
+    OrderError,\
+    LossError, \
+    ProjectError,\
+    EpochError

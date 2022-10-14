@@ -40,15 +40,7 @@ def _is_type(path: str, **kwargs) -> bool:
             return _is_dir(path)
     else:
         logging.warning("(%s)该文件或路径不存在" % path)
-        basename = _base_name(path=path)
-        if '.' not in basename:
-            res = 'dir'
-        else:
-            res = 'doc'
-        if ((file == "doc" or file == "file") and res == 'doc') or (file == "dir" and res == 'dir'):
-            return True
-        else:
-            return False
+        return False
 
 
 def _path_abs(path: str) -> str:
@@ -177,3 +169,5 @@ dirName = _dir_name
 remove = _remove
 splitPath = _split_path
 getSize = _get_size
+
+
