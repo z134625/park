@@ -1,6 +1,6 @@
 import datetime
 import re
-
+from park.conf import exists_rename
 
 def sum_number(w):
     print(w)
@@ -33,13 +33,30 @@ class GroupBy(object):
 
     def __init__(self, obj, key=None):
         # assert isinstance(obj, Iterable)
+        val = None
         group_dict = {}
         for item in obj:
             if key is None:
                 group_dict.update({
                     str(item): group_dict.get(str(item), []) + [item]
                 })
-            else:
+            elif key is True:
+                if item == val:
+                    group_dict.update({
+                        str(item): group_dict.get(str(item), []) + [item]
+                    })
+                    val = item
+                else:
+                    if str(item) not in group_dict:
+                        group_dict.update({
+                            str(item): [item]
+                        })
+                    else:
+                        group_dict.update({
+                            exists_rename(str(item), paths=group_dict.keys(), dif=True): [item]
+                        })
+                    val = item
+            elif callable(key):
                 group_dict.update({
                     str(key(item)): group_dict.get(str(key(item)), []) + [item]
                 })
@@ -60,7 +77,10 @@ class GroupBy(object):
             return obj[self._iter - 1]
 
 
-sd = GroupBy([('a', 1), ('b', 2), ('c', 1)], key=lambda x:x[1])
+sd = GroupBy([('a', 1), ('a', 1), ('b', 2), ('c', 1), ('a', 1), ('c', 1), ('a', 1)], key=True)
 
 for i in sd:
     print(i)
+
+
+

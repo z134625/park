@@ -54,11 +54,11 @@ if __name__ == '__main__':
     # with sk(10) as s:
     #     for i in range(10):
     #         s(func=sum_number)
-    from park.ai import FixedInvestmentCalculator as fx, REINSTATEMENT, YearField, Reta, LOW, MEDIUM, HIGH
+    from park.ai import FixedInvestmentCalculator as fx, REINSTATEMENT, YearField, Reta, LOW, MEDIUM, HIGH, MonthField
     _a = 0
-    s = Reta(LOW)
-    fx = fx(earning_rate=s,
-            principal=3000, dividend=REINSTATEMENT, fixed=YearField(3))
+    s = Reta(HIGH)
+    fx = fx(earning_rate=s, interval_amount=5000,
+            principal=1000, dividend=REINSTATEMENT, fixed=MonthField(31))
     fx.calculator()
     print(fx.amount)
     print(fx.profit)

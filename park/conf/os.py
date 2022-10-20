@@ -33,13 +33,15 @@ def _is_type(path: str, **kwargs) -> bool:
     :return:
     """
     file = kwargs.get('form', "dir")
+    warn = kwargs.get('warn', True)
     if _is_exists(path):
         if file == "doc" or file == "file":
             return _is_file(path)
         else:
             return _is_dir(path)
     else:
-        logging.warning("(%s)该文件或路径不存在" % path)
+        if warn:
+            logging.warning("(%s)该文件或路径不存在" % path)
         return False
 
 
@@ -83,7 +85,7 @@ def _list_path(path: str, **kwargs) -> Iterator:
     assert (doc and not dir_) or (not doc and dir_) or (not doc and not dir_),\
         "file and dirs is conflicted (file 和 dirs不能同时使用)"
     
-    files = os.listdir(path)
+    files = os.listdir(absPath(path))
     if doc or doc_:
         files = filter(lambda x: _is_file(join(path, x)), files)
     if dir_:

@@ -19,6 +19,11 @@ HIGH = 2
 class Reta:
     def __init__(self, risk):
         self.risk_grade = risk
+        self.get = None
+
+    def __call__(self):
+        if self.get:
+            return getattr(self, self.get)
 
     def _generate_rates(self):
         less_rate = [0.01, 0.02, -0.01, -0.02] * 10
@@ -50,23 +55,29 @@ class Reta:
         random.shuffle(res)
         return res
 
+    def get_month(self):
+        return getattr(self, 'month_rate')
+
+    def get_year(self):
+        return getattr(self, 'year_rate')
+
     @property
     def month_rate(self):
         if self.risk_grade == 0:
-            return random.sample([0.03, 0.02, 0.01], 1)[0]
+            return random.sample([0.003, 0.002, 0.001] * 90 + [-.003, -.002, -.001] * 10, 1)[0]
         elif self.risk_grade == 1:
-            return random.sample([0.06, 0.07, 0.08], 1)[0]
+            return random.sample([0.008, 0.007, 0.008] * 75 + [-.008, -.007, -.008] * 25, 1)[0]
         elif self.risk_grade == 2:
-            return random.sample([0.10, 0.11, 0.12], 1)[0]
+            return random.sample([0.02, 0.03, 0.04] * 60 + [-.02, -.03, -.04] * 40, 1)[0]
 
     @property
     def year_rate(self):
         if self.risk_grade == 0:
-            return random.sample([0.06, 0.05, 0.04], 1)[0]
+            return random.sample([0.06, 0.05, 0.04] * 90 + [-.06, -.05, -.04] * 10, 1)[0]
         elif self.risk_grade == 1:
-            return random.sample([0.1, 0.15, 0.2], 1)[0]
+            return random.sample([0.1, 0.15, 0.2] * 75 + [-.1, -.15, -.2] * 25, 1)[0]
         elif self.risk_grade == 2:
-            return random.sample([0.3, 0.4, 0.5], 1)[0]
+            return random.sample([0.3, 0.4, 0.5] * 60 + [-.3, -.4, -.5] * 40, 1)[0]
 
 
 class Amount:
@@ -137,19 +148,19 @@ class FixedInvestmentCalculator:
         self.interval_amount = self._interval_amount
         self.dividend = self._dividend
         self.principal = self._principal
-        if isinstance(self.earning_rate, (float, int)):
-            self.rate = (self.earning_rate / 365)
-            self.month_rate = (self.earning_rate / 12)
-            self.year_rate = self.earning_rate
-        elif isinstance(self.earning_rate, (list, tuple)):
+        if isinstance(self._earning_rate, (float, int)):
+            self.rate = (self._earning_rate / 365)
+            self.month_rate = (self._earning_rate / 12)
+            self.year_rate = self._earning_rate
+        elif isinstance(self._earning_rate, (list, tuple)):
             self.rate = self._get_random_rate
             self.month_rate = self._get_random_rate
             self.year_rate = self._get_random_rate
-        elif isinstance(self.earning_rate, Reta):
-            self.earning_rate = self.earning_rate.value
+        elif isinstance(self._earning_rate, Reta):
+            self.earning_rate = self._earning_rate.value
             self.rate = self._get_random_rate
-            self.month_rate = self.earning_rate.month_rate
-            self.year_rate = self.earning_rate.year_rate
+            self.month_rate = self._earning_rate.get_month
+            self.year_rate = self._earning_rate.get_year
         # self.frequency = self.fixed.divide(self.interval)
 
     def _get_random_rate(self):
@@ -169,12 +180,16 @@ class FixedInvestmentCalculator:
         self.amount = self.principal
         month_amount = self.amount
         month_profit = self.profit
+        year_amount = self.amount
+        year_profit = self.profit
         while True:
             rate = (self.earning_rate if isinstance(self.earning_rate, (float, int)) else self.rate())
             if calculation_date >= end:
                 break
             if calculation_date == interval:
                 self.amount += self.interval_amount
+                month_amount += self.interval_amount
+                year_amount += self.interval_amount
                 self.principal += self.interval_amount
                 interval += self.interval.items()
             profit = self.amount
@@ -188,8 +203,18 @@ class FixedInvestmentCalculator:
             if days % 30 == 0:
                 profit = month_amount
                 if self.dividend:
-                    month_amount += month_amount * rate
+                    month_amount += month_amount * self.month_rate() if callable(self.month_rate) else self.month_rate
                 else:
-                    month_amount += self.principal * rate
-                month_profit += month_profit - profit
-            elif
+                    month_amount += self.principal * self.month_rate() if callable(self.month_rate) else self.month_rate
+                month_profit += month_amount - profit
+            if days % 365 == 0:
+                profit = year_amount
+                if self.dividend:
+                    year_amount += year_amount * self.year_rate() if callable(self.year_rate) else self.year_rate
+                else:
+                    year_amount += self.principal * self.year_rate() if callable(self.year_rate) else self.year_rate
+                year_profit += year_amount - profit
+        print(month_amount)
+        print(month_profit)
+        print(year_amount)
+        print(year_profit)
