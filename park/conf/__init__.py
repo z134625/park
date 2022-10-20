@@ -1,6 +1,8 @@
 import re
+from collections.abc import Iterable
 
 from ._error import *
+from .os import splitPath, absPath
 
 
 __all__ = ("Error", "exists_rename")
@@ -91,39 +93,63 @@ class _ErrorClass:
         return EpochError(msg)
 
 
-def exists_rename(path: str, paths: list = None) -> str:
+def exists_rename(path: str, paths: list = None,
+                  warn: bool = False,
+                  clear: bool = False,
+                  dif: bool = False) -> str:
     from .os import isType, listPath, dirName, base, join
-    if isType(path=path, form='dir'):
-        if path.endswith('/'):
-            path = path[:-1]
-        names = listPath(path=dirName(path), splicing=False, list=True)
-        return join(dirName(path), _generate_name(name=base(path), names=names))
-    if isType(path=path, form='doc'):
-        names = listPath(path=dirName(path), splicing=False, list=True)
-        return join(dirName(path), _generate_name(name=base(path), names=names, mode=1))
+    if not clear:
+        if isType(path=path, form='dir', warn=warn):
+            if path.endswith('/'):
+                path = path[:-1]
+            names = listPath(path=dirName(path), splicing=False, list=True)
+            return join(dirName(path), _generate_name(name=base(path), names=names, dif=dif))
+        if isType(path=path, form='doc', warn=warn):
+            names = listPath(path=dirName(path), splicing=False, list=True)
+            return join(dirName(path), _generate_name(name=base(path), names=names, mode=1, dif=dif))
+        else:
+            names = []
+            if paths:
+                names = paths
+            return _generate_name(name=path, names=names, dif=dif)
     else:
-        names = []
-        if paths:
-            names = paths
-        return _generate_name(name=path, names=names)
+        name, suffix = splitPath(path)
+        pattern = re.compile(r'(.*) \([0-9]+\)')
+        res = re.search(pattern=pattern, string=name)
+        if res:
+            name_head = res.group(1)
+            return name_head + suffix
+        else:
+            return path
 
 
-def _generate_name(name: str, names: list, mode=0) -> str:
+def _generate_name(name: str, names: Iterable[str], mode=0, dif=False) -> str:
     suffix = ''
     if mode == 1:
-        from .os import splitPath, absPath
         name, suffix = splitPath(name)
         names = list(map(lambda x: splitPath(x)[0], filter(lambda x: splitPath(x)[1] == suffix, names)))
     if name in names:
-        pattern = re.compile(r'.*\((\d+)\)')
+        start = ' (1)'
+        pattern_number = re.compile(r'.* \((\d+)\)')
+        pattern_letter = re.compile(r'.* \(([A-Z]+)\)')
+        pattern = pattern_number
+        if dif:
+            start = ' (A)'
+            pattern = pattern_letter
         number = re.match(pattern=pattern, string=name)
         if number:
             number = number.group(1)
-            new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
+            if not dif:
+                new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
+            else:
+                if not number.endswith('Z'):
+                    new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number[:-1] + chr(ord(number[-1]) + 1)), name)
+                else:
+                    new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number + 'A'), name)
         else:
-            new_name = name + ' (1)'
+            new_name = name + start
         if new_name in names:
-            return _generate_name(new_name, names)
+            return _generate_name(new_name, names, mode=0, dif=dif)
         return new_name + suffix
     return name + suffix
 
