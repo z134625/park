@@ -5,11 +5,11 @@ import shutil
 import sys
 import copy
 import pickle
-
 import warnings
 import configparser
+
 from typing import Union, List, Any, Tuple, Set
-from types import MethodType
+from types import MethodType, FunctionType
 from . import LISTFILE
 
 
@@ -140,13 +140,11 @@ def setAttrs(obj: Any, self: bool = False, cover: bool = True, warn: bool = True
     return obj
 
 
-_ = lambda x: x
-
-
 class RegisterEnv:
 
     def __init__(self):
         self._mapping: dict = {}
+        self._monitor: dict = {}
 
     def __call__(self, name, cl):
         self._register(name=name, cl=cl)
@@ -154,6 +152,9 @@ class RegisterEnv:
     def _register(self, name, cl):
         self._mapping.update(
             {name: cl}
+        )
+        self._monitor.update(
+            {name: {}}
         )
 
     def __setattr__(self, key, value):
@@ -176,6 +177,27 @@ class RegisterEnv:
 
     def clear(self):
         return self._mapping.clear()
+
+    def monitor(self, func):
+        var = locals()
+
+
+
+        def warps(*args, **kwargs):
+            cls, func_name = func.__qualname__.split('.')
+            res = func(*args, **kwargs)
+            if cls in self._monitor:
+                if func_name in self._monitor[cls]:
+                    self._monitor[cls][func_name] += 1
+                else:
+                    self._monitor[cls][func_name] = 0
+            return res
+        var[func.__name__] = FunctionType(warps.__code__, {})
+        return func.__name__
+
+    @property
+    def monitoring(self):
+        return self._monitor
 
 
 Register = RegisterEnv()
@@ -237,7 +259,7 @@ class Paras:
         _obj: str = None
         return locals()
 
-    def _set_paras(self, allow: bool = True, kwargs: dict = None) -> None:
+    def _set_paras(self, allow: bool = True, kwargs: dict = None, sel=False) -> None:
         """
         修改属性方法，
         """
@@ -273,15 +295,18 @@ class Paras:
                     if res:
                         attr = res.group(1)
                         _set_list.append((attr, kwargs[key]))
+                if self._set_list:
+                    _set_list += self._set_list
+                    _set_list.reverse()
                 kwargs.update({
                     '_set_list': _set_list
                 })
-                setAttrs(self, warn=False, **kwargs)
+                setAttrs(self, warn=False, self=sel, **kwargs)
                 for key in kwargs.keys():
                     if key not in self._allow_set:
                         self._allow_set.append(key)
                     self._allow_set = list(set(self._allow_set))
-                self._update()
+                self._update(sel=sel)
         except Exception as e:
             warning(f"属性设置失败 原因：{e}", warn=True)
             raise e
@@ -310,8 +335,13 @@ class Paras:
                 raise AttributeError('该类不允许设置属性(%s)' % key)
         return super(Paras, self).__setattr__(key, value)
 
-    def update(self, kwargs: dict) -> Any:
-        self._set_paras(allow=True, kwargs=kwargs)
+    def update(self, kwargs: dict, sel=False) -> Any:
+        self._set_paras(allow=True, kwargs=kwargs, sel=sel)
+        return self
+
+    def self_update(self):
+        kwargs = self.__dict__
+        self._set_paras(allow=True, kwargs=kwargs, sel=True)
         return self
 
     def __getattr__(self, item):
@@ -320,10 +350,10 @@ class Paras:
         else:
             return False
 
-    def _update(self):
+    def _update(self, sel=False):
         if self._obj:
             obj = Register[self._obj]
-            return setAttrs(obj=obj)
+            return setAttrs(obj=obj, self=sel)
         return None
 
 
@@ -343,6 +373,9 @@ class Basics(type):
             for key, val in attrs.items():
                 if key not in ['__module__', '__qualname__']:
                     mappings.add(key)
+        for key, val in attrs.items():
+            if isinstance(val, FunctionType):
+                attrs[key] = Register.monitor(val)
         attrs['__new_attrs__'] = mappings
         res = type.__new__(mcs, name, bases, attrs)
         if attrs.get('_name') and attrs.get('_inherit'):
@@ -424,6 +457,7 @@ class ParkLY(object, metaclass=Basics):
             self._name: self
         })
         self.paras.update({'_obj': self._name})
+        self.paras.self_update()
 
     @classmethod
     def _root_func(cls, func: Union[Any, str]):
@@ -448,14 +482,16 @@ class ParkLY(object, metaclass=Basics):
                 if item in self.paras.root_func and \
                         (call_name not in self.paras.grant and
                          call_name not in self.__new_attrs__ and
-                         call_name not in dir(ParkLY)):
+                         call_name not in dir(ParkLY)
+                        ):
                     if not self.paras._root:
                         raise AttributeError('此方法(%s)为管理员方法，不可调用' % item)
                 return res
             if item.startswith("_") and not self.paras._root and \
                     (call_name not in self.paras.grant and
                      call_name not in self.__new_attrs__ and
-                     call_name not in (dir(self))):
+                     call_name not in (dir(self))
+                    ):
                 raise KeyError("不允许获取私有属性(%s)" % item)
             return super(ParkLY, self).__getattribute__(item)
         except AttributeError as e:
@@ -511,6 +547,8 @@ class ParkLY(object, metaclass=Basics):
         if not gl:
             obj: ParkLY = copy.deepcopy(self)
             paras: Paras = copy.deepcopy(self.paras)
+            Register(name=obj._name + '_temporary', cl=obj)
+            paras.update({'_obj': obj._name + '_temporary'})
             if sys._getframe(1).f_code.co_name not in ('with_context', 'with_root'):
                 if '_root' in kwargs:
                     kwargs.pop('_root')
@@ -525,9 +563,9 @@ class ParkLY(object, metaclass=Basics):
                 paras_dict.update({
                     key: kwargs[key]
                 })
-            paras.update(paras_dict)
             obj.paras = paras
-            obj.paras.update({'_attrs': obj.paras._attrs})
+            obj.paras.self_update()
+            obj.paras.update(paras_dict)
             return obj
         else:
             self.paras.update(kwargs)
@@ -673,6 +711,38 @@ class Setting(ParkLY):
         })
         return self
 
-    @_
-    def reckon_by_time(self):
-        pass
+
+class Generator(object):
+    def __init__(self, f):
+        self.f = f
+
+    def __get__(self, obj, klass=None):
+        new_obj = obj
+        if isinstance(obj, ParkLY):
+            new_obj = copy.deepcopy(obj)
+            new_obj.paras.update({'_attrs': {'id': 1, 'ids': []}})
+
+        def new_func(*args, **kwargs):
+            return self.f(new_obj, *args, **kwargs)
+        return new_func
+
+
+class ObjectParas(Paras):
+
+    @staticmethod
+    def init():
+        _attrs = {'id': None, 'ids': []}
+        _warn = False
+        return locals()
+
+
+class ObjectGenerator(ParkLY):
+    _name = 'object'
+    paras = ObjectParas()
+
+    # @Generator
+    def attrs(self):
+        print(self.id)
+
+    def attr(self):
+        print(self.id)

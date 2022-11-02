@@ -82,7 +82,9 @@ if __name__ == "__main__":
     @new(root=True)
     @new.grant
     def ps(self):
-        self.env['inherit'].sudo().park()
+        s = self.env['inherit'].sudo()
+        s.park()
+
         self.root_func = []
         print(self.root_func)
         print(self.paras)
@@ -105,7 +107,7 @@ if __name__ == "__main__":
         # t = s.sudo()
         # print(t.result)
         # print(s.result)
-    print(new.with_paras(ds=True).paras.ds)
+    # print(new.with_paras(ds=True).paras.ds)
     ps()
 
     # new.with_paras(gl=True, _warn=True, _cover=True)
@@ -117,3 +119,7 @@ if __name__ == "__main__":
     #     '_attrs': {'a': 2}
     # })
     # print(new.a)
+
+    obj = Register['object']
+    print(Register.monitoring)
+    # obj.attr()
