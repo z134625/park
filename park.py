@@ -53,6 +53,7 @@ class New3(ParkLY):
     _inherit = 'New'
     root_func = ['names']
     paras = SettingParas()
+    monitor = ['names']
 
     def names(self):
         # print(sys._getframe().f_code.co_filename)  # 当前文件名，可以通过__file__获得
@@ -120,6 +121,7 @@ if __name__ == "__main__":
     # })
     # print(new.a)
 
-    obj = Register['object']
-    print(Register.monitoring)
+    obj = Register['monitor']
+    print(obj)
     # obj.attr()
+
