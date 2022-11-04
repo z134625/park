@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import shutil
@@ -9,7 +10,7 @@ import warnings
 import configparser
 
 from typing import Union, List, Any, Tuple, Set
-from types import MethodType, FunctionType
+from types import MethodType
 from . import LISTFILE
 
 
@@ -83,6 +84,28 @@ def listPath(path: str, mode: int = LISTFILE, **kwargs) -> Union[list, map, filt
     return files
 
 
+def get_size(obj, seen=None):
+    # From
+    # Recursively finds size of objects
+    size = sys.getsizeof(obj)
+    if seen is None:
+        seen = set()
+    obj_id = id(obj)
+    if obj_id in seen:
+        return 0
+    # Important mark as seen *before* entering recursion to gracefully handle
+    # self-referential objects
+    seen.add(obj_id)
+    if isinstance(obj, dict):
+        size += sum([get_size(v, seen) for v in obj.values()])
+        size += sum([get_size(k, seen) for k in obj.keys()])
+    elif hasattr(obj, '__dict__'):
+        size += get_size(obj.__dict__, seen)
+    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+        size += sum([get_size(i, seen) for i in obj])
+    return size
+
+
 def readPy(file: str) -> dict:
     """
     file 为 字符串
@@ -142,19 +165,19 @@ def setAttrs(obj: Any, self: bool = False, cover: bool = True, warn: bool = True
 
 class RegisterEnv:
 
+    __slots__ = ('_mapping', )
+
     def __init__(self):
         self._mapping: dict = {}
-        self._monitor: dict = {}
 
-    def __call__(self, name, cl):
-        self._register(name=name, cl=cl)
+    def __call__(self, name, cl, warn=True, inherit=False):
+        self._register(name=name, cl=cl, warn=warn, inherit=inherit)
 
-    def _register(self, name, cl):
+    def _register(self, name, cl, warn, inherit):
+        if name in self._mapping and not inherit:
+            warning('该注册名(%s)已存在， 将覆盖旧的应用' % name, warn=warn)
         self._mapping.update(
             {name: cl}
-        )
-        self._monitor.update(
-            {name: {}}
         )
 
     def __setattr__(self, key, value):
@@ -178,29 +201,12 @@ class RegisterEnv:
     def clear(self):
         return self._mapping.clear()
 
-    def monitor(self, func):
-        var = locals()
-
-
-
-        def warps(*args, **kwargs):
-            cls, func_name = func.__qualname__.split('.')
-            res = func(*args, **kwargs)
-            if cls in self._monitor:
-                if func_name in self._monitor[cls]:
-                    self._monitor[cls][func_name] += 1
-                else:
-                    self._monitor[cls][func_name] = 0
-            return res
-        var[func.__name__] = FunctionType(warps.__code__, {})
-        return func.__name__
-
     @property
-    def monitoring(self):
-        return self._monitor
+    def apps(self):
+        return list(self._mapping.keys())
 
 
-Register = RegisterEnv()
+env = RegisterEnv()
 
 
 class Paras:
@@ -226,9 +232,6 @@ class Paras:
         # 获取配置字典
         set_dict = {**self._init(), **self.init()}
         self._set_paras(allow=allow, kwargs=set_dict)
-        for key in set(self.ban + self._ban):
-            if key in self._allow_set:
-                self._allow_set.remove(key)
 
     @staticmethod
     def init() -> dict:
@@ -259,7 +262,7 @@ class Paras:
         _obj: str = None
         return locals()
 
-    def _set_paras(self, allow: bool = True, kwargs: dict = None, sel=False) -> None:
+    def _set_paras(self, allow: bool = True, kwargs: dict = None, sel=False, is_obj=False) -> None:
         """
         修改属性方法，
         """
@@ -268,12 +271,15 @@ class Paras:
         self._allow = allow
         try:
             if sys._getframe(1).f_code.co_name == 'update':
-                pop_keys = []
-                for key in kwargs.keys():
-                    if key not in self._allow_set:
-                        pop_keys.append(key)
-                for key in pop_keys:
-                    if key != '_obj':
+                if is_obj:
+                    _obj = kwargs.get('_obj', None)
+                    kwargs = {'_obj': _obj}
+                else:
+                    pop_keys = []
+                    for key in kwargs.keys():
+                        if key not in self._allow_set:
+                            pop_keys.append(key)
+                    for key in pop_keys:
                         kwargs.pop(key)
             if sys._getframe(1).f_code.co_name in ('update', '__init__'):
                 if '_attrs' in kwargs:
@@ -287,7 +293,10 @@ class Paras:
                             '_set_list': list(attrs.items())
                         })
                     sys_attrs = self._attrs if self._attrs else {}
-                    kwargs['_attrs'] = {**sys_attrs}
+                    if sys._getframe(1).f_code.co_name == '__init__':
+                        kwargs['_attrs'] = attrs
+                    else:
+                        kwargs['_attrs'] = {**sys_attrs}
                 pattern = re.compile(r'^attrs_([a-zA-Z_]+)')
                 _set_list = kwargs.get('_set_list', [])
                 for key in kwargs.keys():
@@ -302,11 +311,16 @@ class Paras:
                     '_set_list': _set_list
                 })
                 setAttrs(self, warn=False, self=sel, **kwargs)
-                for key in kwargs.keys():
-                    if key not in self._allow_set:
-                        self._allow_set.append(key)
-                    self._allow_set = list(set(self._allow_set))
+                if sys._getframe(1).f_code.co_name == '__init__':
+                    for key in kwargs.keys():
+                        if key not in self._allow_set:
+                            self._allow_set.append(key)
+                        self._allow_set = list(set(self._allow_set))
+                    for key in set(self.ban + self._ban):
+                        if key in self._allow_set:
+                            self._allow_set.remove(key)
                 self._update(sel=sel)
+
         except Exception as e:
             warning(f"属性设置失败 原因：{e}", warn=True)
             raise e
@@ -335,13 +349,11 @@ class Paras:
                 raise AttributeError('该类不允许设置属性(%s)' % key)
         return super(Paras, self).__setattr__(key, value)
 
-    def update(self, kwargs: dict, sel=False) -> Any:
-        self._set_paras(allow=True, kwargs=kwargs, sel=sel)
-        return self
-
-    def self_update(self):
-        kwargs = self.__dict__
-        self._set_paras(allow=True, kwargs=kwargs, sel=True)
+    def update(self, kwargs: dict, sel=False, is_obj=False) -> Any:
+        """
+        更新配置的一些属性
+        """
+        self._set_paras(allow=True, kwargs=kwargs, sel=sel, is_obj=is_obj)
         return self
 
     def __getattr__(self, item):
@@ -352,7 +364,7 @@ class Paras:
 
     def _update(self, sel=False):
         if self._obj:
-            obj = Register[self._obj]
+            obj = env[self._obj]
             return setAttrs(obj=obj, self=sel)
         return None
 
@@ -360,6 +372,11 @@ class Paras:
 class Basics(type):
 
     def __new__(mcs, name, bases, attrs):
+        """
+        重组定义的类，
+        增加新的属性__new_attrs__
+        添加默认属性 paras
+        """
         mappings = set()
         if attrs['__qualname__'] != 'ParkLY':
             if not attrs.get('_name') and not attrs.get('_inherit'):
@@ -373,32 +390,59 @@ class Basics(type):
             for key, val in attrs.items():
                 if key not in ['__module__', '__qualname__']:
                     mappings.add(key)
-        for key, val in attrs.items():
-            if isinstance(val, FunctionType):
-                attrs[key] = Register.monitor(val)
         attrs['__new_attrs__'] = mappings
         res = type.__new__(mcs, name, bases, attrs)
         if attrs.get('_name') and attrs.get('_inherit'):
-            parent = Register[attrs.get('_inherit')]
-            if not isinstance(parent, Basics):
-                parent = parent.__class__
-            bases = (parent,)
+            inherits = attrs.get('_inherit')
+            if isinstance(inherits, str):
+                parent = env[attrs.get('_inherit')]
+                if not isinstance(parent, Basics):
+                    parent = parent.__class__
+                bases = (parent,)
+            elif isinstance(inherits, (tuple, list)):
+                bases = []
+                _attrs = {}
+                for inherit in inherits:
+                    parent = env[inherit]
+                    if not isinstance(parent, Basics):
+                        parent = parent.__class__
+                    _attrs.update(parent.paras._attrs)
+                    bases += [parent]
+                if 'paras' in attrs and isinstance(attrs['paras'], Paras):
+                    attrs['paras'].update({
+                        '_attrs': _attrs
+                    })
+                else:
+                    paras = bases[-1].paras
+                    paras.update({
+                        '_attrs': _attrs
+                    })
+                    attrs['paras'] = paras
+                bases = tuple(bases)
             res = type.__new__(mcs, name, bases, attrs)
-            Register(name=attrs.get('_name'), cl=res)
+            env(name=attrs.get('_name'), cl=res)
         elif attrs.get('_name'):
-            Register(name=attrs.get('_name'), cl=res)
+            env(name=attrs.get('_name'), cl=res)
         elif attrs.get('_inherit'):
-            parent = Register[attrs.get('_inherit')]
+            inherit = attrs.get('_inherit')
+            if isinstance(inherit, (tuple, list)):
+                inherit = inherit[0]
+            parent = env[inherit]
             if not isinstance(parent, Basics):
                 parent = parent.__class__
             bases = (parent,)
             res = type.__new__(mcs, name, bases, attrs)
-            Register(name=attrs.get('_inherit'), cl=res)
-        setattr(res, 'env', Register)
+            env(name=inherit, cl=res, inherit=True)
+        setattr(res, 'env', env)
         return res
 
 
 class ParkLY(object, metaclass=Basics):
+    """
+    为工具类中的基类，
+    该类定义一些基础方法供使用
+    也可自行增加元类， 创建。此操作将舍弃 基类中所有定义的方法
+    """
     _name = 'ParkLY'
     _inherit = None
     root_func: List[str] = []
@@ -416,7 +460,8 @@ class ParkLY(object, metaclass=Basics):
             else:
                 for func in cls.root_func:
                     cls._root_func(func)
-        return super().__new__(cls)
+        res = super().__new__(cls)
+        return res
 
     def __init__(self, **kwargs):
         self.init(**kwargs)
@@ -424,6 +469,8 @@ class ParkLY(object, metaclass=Basics):
     def __call__(self, func=None, root: bool = False):
         """
         增加属性方法
+        root 将对增加的方法施加管理员权限，
+        当开启管理设置、 或自身方法调用时将不做限制
         """
         if func:
             setattr(self, func.__name__, MethodType(func, self))
@@ -452,12 +499,18 @@ class ParkLY(object, metaclass=Basics):
         return wrapper
 
     def init(self, **kwargs):
+        """
+        类实例化时的初始化方法
+        该方法将更新 环境变量中对应的对象
+        未初始化的对对象， 环境变量中保存的未类
+        """
+        self.paras.update({'_attrs': self.paras._attrs})
         self.paras.update(kwargs)
+        self.paras.update({'_obj': self._name}, is_obj=True)
         self.env._mapping.update({
             self._name: self
         })
-        self.paras.update({'_obj': self._name})
-        self.paras.self_update()
+
 
     @classmethod
     def _root_func(cls, func: Union[Any, str]):
@@ -547,7 +600,7 @@ class ParkLY(object, metaclass=Basics):
         if not gl:
             obj: ParkLY = copy.deepcopy(self)
             paras: Paras = copy.deepcopy(self.paras)
-            Register(name=obj._name + '_temporary', cl=obj)
+            env(name=obj._name + '_paras', cl=obj)
             paras.update({'_obj': obj._name + '_temporary'})
             if sys._getframe(1).f_code.co_name not in ('with_context', 'with_root'):
                 if '_root' in kwargs:
@@ -564,7 +617,6 @@ class ParkLY(object, metaclass=Basics):
                     key: kwargs[key]
                 })
             obj.paras = paras
-            obj.paras.self_update()
             obj.paras.update(paras_dict)
             return obj
         else:
@@ -612,6 +664,12 @@ class ParkLY(object, metaclass=Basics):
         return self.paras._attrs
 
     def give(self, obj, content=None):
+        """
+        此方法用于将自身属性给予给出的参数
+        不提供content 则将自身的 新增的属性赋给 obj对象
+        content 必须为字典形式
+        以 key 变量名， value 变量值 可以为方法， 也可以为值
+        """
         if not content:
             if isinstance(obj, ParkLY):
                 obj.paras.update({
@@ -656,7 +714,14 @@ class SettingParas(Paras):
 
 
 class Setting(ParkLY):
-    _name = 'Setting'
+    """
+    设置文件方法，
+    新增open方法 可以加载路径的配置文件并赋予给自身对象
+    注： 默认的 以_开头的变量将被定义为 私有属性
+    若需要获取此私有属性， 可调用 obj.sudo()._a 即可
+    默认的在继承中 将不会对这进行限制
+    """
+    _name = 'setting'
     paras = SettingParas()
 
     def open(self, path: str, **kwargs) -> Any:
@@ -712,37 +777,227 @@ class Setting(ParkLY):
         return self
 
 
-class Generator(object):
-    def __init__(self, f):
-        self.f = f
+class monitor(object):
+    """
+    监控装饰器， 配合监控方法Monitor 使用
+    @monitor('monitor1')
+    def test(self):
+        return None
+    在此案例中 没当test执行时， 都将调用 monitor1 的监控方法，
+    若监控方法 中需要test 的返回值时， monitor1 中可以直接使用 self._return 获取
+    默认得 _return  是为False
+    monitor 的监控方法需要传参时 可在后加上参数， 即
+    def monitor1(self, args1, kwargs1):
+        pass
+    @monitor('monitor1', 1, 2)
+    def test(self):
+        return None
+    """
+    __slots__ = ('field', 'args', 'func')
+
+    def __init__(self, field, *args, **kwargs):
+        self.field = field
+        self.args = (args, kwargs)
+
+    def __call__(self, func):
+        self.func = func
+        return self
 
     def __get__(self, obj, klass=None):
-        new_obj = obj
-        if isinstance(obj, ParkLY):
-            new_obj = copy.deepcopy(obj)
-            new_obj.paras.update({'_attrs': {'id': 1, 'ids': []}})
-
-        def new_func(*args, **kwargs):
-            return self.f(new_obj, *args, **kwargs)
-        return new_func
+        if isinstance(obj, Monitor):
+            return obj._monitoring(self.func, self.field, self.args)
+        return obj
 
 
-class ObjectParas(Paras):
+class monitorV(object):
+    """
+    监控装饰器， 配合监控方法MonitorV 使用 用于监控 对象中变量修改 即触发__set__ 时
+    @monitor('var')
+    def test(self):
+        return None
+    在此案例中 默认监控 var变量， 当var 触发__set__ 方法时 同时将触发test
+    """
+    __slots__ = ('fields', 'args', 'func')
+
+    def __init__(self, fields):
+        self.fields = fields
+
+    def __call__(self, func):
+        self.func = func
+        return self
+
+    def __get__(self, obj, klass=None):
+        if isinstance(obj, Monitor):
+            return obj._monitoringV(self.func, self.fields)
+
+
+class MonitorParas(Paras):
+    """
+    监控方法的配置，
+    默认将添加_return 参数，
+    该参数用于获取被监控方法的返回值
+    """
+    ban = ['_error', 'context', 'grant', '_root']
 
     @staticmethod
     def init():
-        _attrs = {'id': None, 'ids': []}
+        _attrs = {'_return': False,
+                  '_funcName': None,
+                  '_monitor_fields': [],
+                  '_monitor_func': {},
+                  }
+        _error = False
+        _root = True
         _warn = False
         return locals()
 
 
-class ObjectGenerator(ParkLY):
-    _name = 'object'
-    paras = ObjectParas()
+class Monitor(ParkLY):
+    """
+    监控主要类
+    使用方式
+>>>    class Test(ParkLY):
+>>>        _inherit = 'monitor'
+>>>
+>>>        @monitor('monitor1')
+>>>        def test1(self):
+>>>            return 100
+>>>
+>>>        def monitor1(self):
+>>>            print(self._return)
+>>>    test = Test()
+>>>    test.test1()
+>>>    100
+    """
+    _name = 'monitor'
+    paras = MonitorParas()
 
-    # @Generator
-    def attrs(self):
-        print(self.id)
+    def init(self, **kwargs):
+        res = super(Monitor, self).init(**kwargs)
+        for f in dir(self):
+            if not (f.startswith('__') and f.endswith('__')):
+                eval(f'self.{f}')
+        return res
 
-    def attr(self):
-        print(self.id)
+    def _monitoring(self, func, monit, arg):
+        @self.grant
+        def monitoring_warps(*args, **kwargs):
+            res = func(*args, **kwargs)
+            self._return = res
+            if isinstance(monit, str):
+                monit_func = getattr(self, monit)
+                self._funcName = MethodType(func, self).__name__
+                monit_func(*arg[0], **arg[1])
+            elif isinstance(monit, (list, tuple, set)):
+                for f in monit:
+                    monit_func = getattr(self, f)
+                    self._funcName = func.__name__
+                    monit_func(*arg[0], **arg[1])
+            self._funcName = None
+            self._return = False
+            return res
+        return monitoring_warps
+
+    def _monitoringV(self, func, monit):
+        self._monitor_fields.append(monit)
+        self._monitor_func[monit] = func
+
+        @self.grant
+        def monitoringV_warps(*args, **kwargs):
+            res = func(*args, **kwargs)
+            return res
+        return monitoringV_warps
+
+    def __setattr__(self, key, value):
+        res = super(Monitor, self).__setattr__(key=key, value=value)
+        if key in self._monitor_fields:
+            self._monitor_func[key]()
+        return res
+
+
+class ToolsParas(Paras):
+    """
+    工具配置
+    """
+
+    @staticmethod
+    def init():
+        _attrs = {
+            '_command_keyword_help': {},
+            '_command_func': {},
+        }
+        _root = True
+        return locals()
+
+
+class command(object):
+    """
+
+    """
+    __slots__ = ('keyword', 'args', 'func')
+
+    def __init__(self, keyword):
+        self.keyword = keyword
+
+    def __call__(self, func):
+        self.func = func
+        return self
+
+    def __get__(self, obj, klass=None):
+        if isinstance(obj, Tools):
+            func = MethodType(self.func, obj)
+            return obj._command(func, self.keyword)
+
+
+class Tools(ParkLY):
+    _name = 'tools'
+    paras = ToolsParas()
+
+    def init(self, **kwargs):
+        res = super(Tools, self).init(**kwargs)
+        for f in dir(self):
+            if not (f.startswith('__') and f.endswith('__')):
+                eval(f'self.{f}')
+        return res
+
+    def _command(self, func, keyword):
+        if isinstance(keyword, str):
+            self._command_keyword_help[keyword] = func.__doc__ or '没有使用帮助'
+            self._command_func[keyword] = func
+        elif isinstance(keyword, (tuple, list)):
+            for key in keyword:
+                self._command_keyword_help[key] = func.__doc__
+                self._command_func[key] = func
+
+        @self.grant
+        def command_warps(*args, **kwargs):
+            res = func(*args, **kwargs)
+            return res
+        return command_warps
+
+    def main(self):
+        commands = sys.argv[1:]
+        error = []
+        if '--help' not in commands:
+            for com in commands:
+                if com in self._command_func:
+                    args = tuple()
+                    index = commands.index(com) + 1
+                    if index < len(commands) and commands[index] not in self._command_func:
+                        args = (commands[index], )
+                    func = self._command_func[com]
+                    try:
+                        func(*args)
+                    except Exception as e:
+                        error.append(f'{func.__name__}执行失败,原因:({e})')
+                    finally:
+                        continue
+        else:
+            for com in commands:
+                if com in self._command_keyword_help:
+                    print(f"""{com}: \n {self._command_keyword_help[com]}""")
+        if not error:
+            return True
+        else:
+            logging.error('\n'.join(error))
+            return False
