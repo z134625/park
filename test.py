@@ -1,23 +1,20 @@
-from parkPro.tools import monitor, ParkLY
+from parkPro.tools import monitor, ParkLY, monitorV
 import parkPro.image
-import sys
-
-
 
 
 class Test(ParkLY):
+    _name = 'test'
     _inherit = 'monitor'
     root_func = ['tests']
 
     def test(self):
-        self.env.load()
-        obj = self.env['image']
-        obj.compress_png(r'C:\Users\PC\Desktop')
-        obj.compress_png(r'C:\Users\PC\Desktop')
-        obj.compress_png(r'C:\Users\PC\Desktop')
+        self.a = 100
+        self.b = 1000
+        self.c = None
 
+    @monitorV('a')
     def tests(self):
-        print(self._return)
+        self.b = self.a * 10
 
     @monitor(['tests', 'test'])
     def attrs(self):
@@ -27,4 +24,8 @@ class Test(ParkLY):
 
 if __name__ == '__main__':
     test = Test()
-    test.attrs()
+    test.test()
+    print(test.a)
+    print(test.b)
+    test.a = 1
+    print(test.b)

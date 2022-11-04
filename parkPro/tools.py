@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import shutil
@@ -292,7 +293,10 @@ class Paras:
                             '_set_list': list(attrs.items())
                         })
                     sys_attrs = self._attrs if self._attrs else {}
-                    kwargs['_attrs'] = {**sys_attrs}
+                    if sys._getframe(1).f_code.co_name == '__init__':
+                        kwargs['_attrs'] = attrs
+                    else:
+                        kwargs['_attrs'] = {**sys_attrs}
                 pattern = re.compile(r'^attrs_([a-zA-Z_]+)')
                 _set_list = kwargs.get('_set_list', [])
                 for key in kwargs.keys():
@@ -389,21 +393,46 @@ class Basics(type):
         attrs['__new_attrs__'] = mappings
         res = type.__new__(mcs, name, bases, attrs)
         if attrs.get('_name') and attrs.get('_inherit'):
-            parent = env[attrs.get('_inherit')]
-            if not isinstance(parent, Basics):
-                parent = parent.__class__
-            bases = (parent,)
+            inherits = attrs.get('_inherit')
+            if isinstance(inherits, str):
+                parent = env[attrs.get('_inherit')]
+                if not isinstance(parent, Basics):
+                    parent = parent.__class__
+                bases = (parent,)
+            elif isinstance(inherits, (tuple, list)):
+                bases = []
+                _attrs = {}
+                for inherit in inherits:
+                    parent = env[inherit]
+                    if not isinstance(parent, Basics):
+                        parent = parent.__class__
+                    _attrs.update(parent.paras._attrs)
+                    bases += [parent]
+                if 'paras' in attrs and isinstance(attrs['paras'], Paras):
+                    attrs['paras'].update({
+                        '_attrs': _attrs
+                    })
+                else:
+                    paras = bases[-1].paras
+                    paras.update({
+                        '_attrs': _attrs
+                    })
+                    attrs['paras'] = paras
+                bases = tuple(bases)
             res = type.__new__(mcs, name, bases, attrs)
             env(name=attrs.get('_name'), cl=res)
         elif attrs.get('_name'):
             env(name=attrs.get('_name'), cl=res)
         elif attrs.get('_inherit'):
-            parent = env[attrs.get('_inherit')]
+            inherit = attrs.get('_inherit')
+            if isinstance(inherit, (tuple, list)):
+                inherit = inherit[0]
+            parent = env[inherit]
             if not isinstance(parent, Basics):
                 parent = parent.__class__
             bases = (parent,)
             res = type.__new__(mcs, name, bases, attrs)
-            env(name=attrs.get('_inherit'), cl=res, inherit=True)
+            env(name=inherit, cl=res, inherit=True)
         setattr(res, 'env', env)
         return res
 
@@ -692,7 +721,7 @@ class Setting(ParkLY):
     若需要获取此私有属性， 可调用 obj.sudo()._a 即可
     默认的在继承中 将不会对这进行限制
     """
-    _name = 'Setting'
+    _name = 'setting'
     paras = SettingParas()
 
     def open(self, path: str, **kwargs) -> Any:
@@ -776,8 +805,30 @@ class monitor(object):
 
     def __get__(self, obj, klass=None):
         if isinstance(obj, Monitor):
-            func = MethodType(self.func, obj)
-            return obj._monitoring(func, self.field, self.args)
+            return obj._monitoring(self.func, self.field, self.args)
+        return obj
+
+
+class monitorV(object):
+    """
+    监控装饰器， 配合监控方法MonitorV 使用 用于监控 对象中变量修改 即触发__set__ 时
+    @monitor('var')
+    def test(self):
+        return None
+    在此案例中 默认监控 var变量， 当var 触发__set__ 方法时 同时将触发test
+    """
+    __slots__ = ('fields', 'args', 'func')
+
+    def __init__(self, fields):
+        self.fields = fields
+
+    def __call__(self, func):
+        self.func = func
+        return self
+
+    def __get__(self, obj, klass=None):
+        if isinstance(obj, Monitor):
+            return obj._monitoringV(self.func, self.fields)
 
 
 class MonitorParas(Paras):
@@ -790,7 +841,11 @@ class MonitorParas(Paras):
 
     @staticmethod
     def init():
-        _attrs = {'_return': False, '_funcName': None}
+        _attrs = {'_return': False,
+                  '_funcName': None,
+                  '_monitor_fields': [],
+                  '_monitor_func': {},
+                  }
         _error = False
         _root = True
         _warn = False
@@ -817,16 +872,21 @@ class Monitor(ParkLY):
     _name = 'monitor'
     paras = MonitorParas()
 
-    def _monitoring(self, func, monit, arg):
+    def init(self, **kwargs):
+        res = super(Monitor, self).init(**kwargs)
+        for f in dir(self):
+            if not (f.startswith('__') and f.endswith('__')):
+                eval(f'self.{f}')
+        return res
 
+    def _monitoring(self, func, monit, arg):
         @self.grant
         def monitoring_warps(*args, **kwargs):
-
             res = func(*args, **kwargs)
             self._return = res
             if isinstance(monit, str):
                 monit_func = getattr(self, monit)
-                self._funcName = func.__name__
+                self._funcName = MethodType(func, self).__name__
                 monit_func(*arg[0], **arg[1])
             elif isinstance(monit, (list, tuple, set)):
                 for f in monit:
@@ -838,3 +898,106 @@ class Monitor(ParkLY):
             return res
         return monitoring_warps
 
+    def _monitoringV(self, func, monit):
+        self._monitor_fields.append(monit)
+        self._monitor_func[monit] = func
+
+        @self.grant
+        def monitoringV_warps(*args, **kwargs):
+            res = func(*args, **kwargs)
+            return res
+        return monitoringV_warps
+
+    def __setattr__(self, key, value):
+        res = super(Monitor, self).__setattr__(key=key, value=value)
+        if key in self._monitor_fields:
+            self._monitor_func[key]()
+        return res
+
+
+class ToolsParas(Paras):
+    """
+    工具配置
+    """
+
+    @staticmethod
+    def init():
+        _attrs = {
+            '_command_keyword_help': {},
+            '_command_func': {},
+        }
+        _root = True
+        return locals()
+
+
+class command(object):
+    """
+
+    """
+    __slots__ = ('keyword', 'args', 'func')
+
+    def __init__(self, keyword):
+        self.keyword = keyword
+
+    def __call__(self, func):
+        self.func = func
+        return self
+
+    def __get__(self, obj, klass=None):
+        if isinstance(obj, Tools):
+            func = MethodType(self.func, obj)
+            return obj._command(func, self.keyword)
+
+
+class Tools(ParkLY):
+    _name = 'tools'
+    paras = ToolsParas()
+
+    def init(self, **kwargs):
+        res = super(Tools, self).init(**kwargs)
+        for f in dir(self):
+            if not (f.startswith('__') and f.endswith('__')):
+                eval(f'self.{f}')
+        return res
+
+    def _command(self, func, keyword):
+        if isinstance(keyword, str):
+            self._command_keyword_help[keyword] = func.__doc__ or '没有使用帮助'
+            self._command_func[keyword] = func
+        elif isinstance(keyword, (tuple, list)):
+            for key in keyword:
+                self._command_keyword_help[key] = func.__doc__
+                self._command_func[key] = func
+
+        @self.grant
+        def command_warps(*args, **kwargs):
+            res = func(*args, **kwargs)
+            return res
+        return command_warps
+
+    def main(self):
+        commands = sys.argv[1:]
+        error = []
+        if '--help' not in commands:
+            for com in commands:
+                if com in self._command_func:
+                    args = tuple()
+                    index = commands.index(com) + 1
+                    if index < len(commands) and commands[index] not in self._command_func:
+                        args = (commands[index], )
+                    func = self._command_func[com]
+                    try:
+                        func(*args)
+                    except Exception as e:
+                        error.append(f'{func.__name__}执行失败,原因:({e})')
+                    finally:
+                        continue
+        else:
+            for com in commands:
+                if com in self._command_keyword_help:
+                    print(f"""{com}: \n {self._command_keyword_help[com]}""")
+        if not error:
+            return True
+        else:
+            logging.error('\n'.join(error))
+            return False
