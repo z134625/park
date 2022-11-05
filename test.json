@@ -1,0 +1,9 @@
+{
+  "project_data_train": "f:/Desktop/cache/log",
+  "project_data_labels": "f:/Desktop/cache/log",
+  "project_data": "f:/Desktop/cache/log",
+  "data": {
+    "px": 1,
+    "pl": 2
+  }
+}

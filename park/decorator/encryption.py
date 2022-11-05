@@ -3,13 +3,30 @@ import hashlib
 import re
 import base64
 from Crypto.Cipher import AES
-from . import register
+from ..tools import ParkLY
 
 
-@register
-class EncryptionData(object):
+class EncryptionData(ParkLY):
+    _inherit = 'tools'
+    root_func = ['_generate_data',
+                 '_md5_data',
+                 '_sha1_data',
+                 '_base64_data',
+                 '_add_to_16',
+                 '_AES_data',
+                 '_check_timeout_data']
 
-    def __init__(self, data, mode, timeout, key=None):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.give(self, {
+            'str_data': None,
+            '_timeout': None,
+            '_aes_key': None,
+            '_result': b'EncryptionData',
+            'mode': None,
+        })
+
+    def config(self, data, mode, timeout, key=None):
         assert type(data).__name__ in ['str', 'list', 'tuple', 'dict', 'set', 'int']
         str_data = str(data)
         self.str_data = str_data.encode('utf-8')
@@ -24,6 +41,7 @@ class EncryptionData(object):
         elif mode == 3:
             self._result = self._AES_data()
         self.mode = mode
+        return self
 
     def _generate_data(self):
         datetime_pattern = re.compile(r'^(\d{4})-(\d{1,2})-(\d{1,2}) (\d{1,2}):?(\d{1,2}):?(\d{1,2})')
@@ -156,13 +174,13 @@ class EncryptionData(object):
     def __str__(self):
         return str(self._result.decode())
 
+    def encryption(self, mode=2, timeout=None):
+        def wrapper(func):
+            def warp(*args, **kwargs):
+                res = func(*args, **kwargs)
+                return self.config(data=res, mode=mode, timeout=timeout)
+            return warp
+        return wrapper
 
-@register
-def encryption(mode=2, timeout=None):
-    def wrapper(func):
-        def warp(*args, **kwargs):
-            res = func(*args, **kwargs)
-            return EncryptionData(data=res, mode=mode, timeout=timeout)
-        return warp
-    return wrapper
 
+encryption = EncryptionData()

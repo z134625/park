@@ -75,20 +75,24 @@ class User(Model):
 
 
 # 创建一个实例：
-u = User(id=12345, name='Michael', email='test@orm.org', password='password')
-# 保存到数据库：
-u.save()
+# u = User(id=12345, name='Michael', email='test@orm.org', password='password')
+# # 保存到数据库：
+# u.save()
+#
+# import pickle
+#
+# a = pickle.dumps({'12': 1})
+# print(a)
+# f = open('./pp.park', 'wb')
+# pickle.dump(a, f)
+#
+# f = open('./pp.park', 'rb')
+# s = pickle.load(f)
+# k = pickle.loads(s)
+# print(k['12'])
+#
+# print(bool(list(filter(lambda x: x in '(行政)工作餐', ['工作餐', '公务接待']))))
 
-import pickle
 
-a = pickle.dumps({'12': 1})
-print(a)
-f = open('./pp.park', 'wb')
-pickle.dump(a, f)
-
-f = open('./pp.park', 'rb')
-s = pickle.load(f)
-k = pickle.loads(s)
-print(k['12'])
-
-print(bool(list(filter(lambda x: x in '(行政)工作餐', ['工作餐', '公务接待']))))
+def loads():
+    print(222)

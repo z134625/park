@@ -1,9 +1,7 @@
 from typing import Any
-from park.decorator import register, park
 
 
-@register(call=False)
-class _GPUClass:
+class GPUClass:
     """
     查看电脑GPU 属性 self.gpu_count 显示电脑GPU数量，
     self.gpu 将返回cpu字符串， [0] 表示选择第一个GPU
@@ -15,10 +13,13 @@ class _GPUClass:
     self.gpu[0]["Speed"] 将显示第一个gpu的风速 (self.gpu[0]["风速"])
     self.gpu[0]["Power"] 将显示第一个gpu的电源 (self.gpu[0]["电源"])
     """
+    _name = 'park.gpu'
     __slots__ = ["gpu_count", "gpu", "DriverVersion", "version", "pynvml"]
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.pynvml = __import__("pynvml")
+        print(self.pynvml)
         try:
             self.pynvml.nvmlInit()
             self.gpu_count = self.pynvml.nvmlDeviceGetCount()
@@ -80,8 +81,3 @@ class _GPUClass:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.pynvml.nvmlShutdown()
 
-
-GPU = park['_GPUClass']
-
-
-__all__ = ("GPU", )

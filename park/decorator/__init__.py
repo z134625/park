@@ -434,8 +434,8 @@ class _Park(object):
                     super(NewClass, self).__getattr__(item)
 
             @classmethod
-            def _generate_name(cls):
-                cls._name = func.__name__
+            def _generate_name(self):
+                self._name = func.__name__
 
         NewClass._generate_name()
 
