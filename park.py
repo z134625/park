@@ -1,4 +1,4 @@
-from parkPro.tools import ParkLY, Register, SettingParas, remove
+from parkPro.tools import ParkLY, env, SettingParas, remove
 import inherit
 
 
@@ -53,6 +53,7 @@ class New3(ParkLY):
     _inherit = 'New'
     root_func = ['names']
     paras = SettingParas()
+    monitor = ['names']
 
     def names(self):
         # print(sys._getframe().f_code.co_filename)  # 当前文件名，可以通过__file__获得
@@ -64,7 +65,7 @@ class New3(ParkLY):
         # print(self.env['New'].__class__.__bases__[0])
         print(self.paras)
         self.env['New'].pas()
-        a = self.env['Setting']
+        a = self.env['setting']
         a.open(r'.\conf.txt')
         print(a.sudo()._a)
         a.give(self)
@@ -75,14 +76,15 @@ class New3(ParkLY):
 
 
 if __name__ == "__main__":
-    Register.load()
+    env.load()
     New3(_error=True, _warn=False, _cover=True)
-    new = Register['New3']
+    new = env['New3']
 
     @new(root=True)
-    @new.grant
     def ps(self):
-        self.env['inherit'].sudo().park()
+        s = self.env['inherit'].sudo()
+        s.park()
+
         self.root_func = []
         print(self.root_func)
         print(self.paras)
@@ -105,8 +107,9 @@ if __name__ == "__main__":
         # t = s.sudo()
         # print(t.result)
         # print(s.result)
-    print(new.with_paras(ds=True).paras.ds)
+    # print(new.with_paras(ds=True).paras.ds)
     ps()
+    print(ne)
 
     # new.with_paras(gl=True, _warn=True, _cover=True)
     # new.paras.update({
@@ -117,3 +120,8 @@ if __name__ == "__main__":
     #     '_attrs': {'a': 2}
     # })
     # print(new.a)
+
+    obj = env['monitor']
+    print(obj)
+    # obj.attr()
+
