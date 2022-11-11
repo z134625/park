@@ -1,5 +1,5 @@
 from parkPro.tools import ParkLY, command, monitor, monitorV, Paras
-
+import logging
 
 class TestParas(Paras):
 
@@ -11,7 +11,7 @@ class TestParas(Paras):
 
 class Test(ParkLY):
     _name = 'test'
-    _inherit = ['monitor', 'tools']
+    _inherit = ['monitor', 'command']
     root_func = ['main']
     paras = TestParas()
 
@@ -19,17 +19,19 @@ class Test(ParkLY):
         self.i += 1
         self.a += 1
 
-    @monitorV('i')
-    @command(['-t', '--test'])
-    def test(self):
+        logging.info('info')
+
+    @monitorV('i', a=1)
+    @command(['-t', '--test'], unique=False)
+    def test(self, a):
         """
         这是测试
         """
         return self.i
 
     @monitor('info')
-    @command(['--file', '-f'])
-    def update(self):
+    @command(['--file', '-f'], unique=False)
+    def update(self, a):
         for _ in range(10000):
             self.i += 1
         return 'update'
