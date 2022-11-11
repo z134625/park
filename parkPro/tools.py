@@ -371,10 +371,11 @@ class command(object):
     """
 
     """
-    __slots__ = ('keyword', 'args', 'func')
+    __slots__ = ('keyword', 'unique', 'args', 'func')
 
-    def __init__(self, keyword):
+    def __init__(self, keyword, unique=False):
         self.keyword = keyword
+        self.unique = unique
 
     def __call__(self, func):
         self.func = func
@@ -383,7 +384,7 @@ class command(object):
     def __get__(self, obj, klass=None):
         if isinstance(obj, Tools):
             func = MethodType(self.func, obj)
-            return obj._command(func, self.keyword)
+            return obj._command(func, self.keyword, self.unique)
 
 
 class monitorV(object):
@@ -396,8 +397,9 @@ class monitorV(object):
     """
     __slots__ = ('fields', 'args', 'func')
 
-    def __init__(self, fields):
+    def __init__(self, fields, *args, **kwargs):
         self.fields = fields
+        self.args = (args, kwargs)
 
     def __call__(self, func):
         self.func = func
@@ -406,9 +408,9 @@ class monitorV(object):
     def __get__(self, obj, klass=None):
         if isinstance(obj, Monitor) and isinstance(obj, Tools) and isinstance(self.func, command):
             func = MethodType(self.func.func, obj)
-            return obj._monitoringV(func, self.fields, keyword=self.func.keyword)
+            return obj._monitoringV(func, self.fields, self.args, keyword=self.func.keyword, unique=self.func.unique)
         elif isinstance(obj, Monitor):
-            return obj._monitoringV(self.func, self.fields)
+            return obj._monitoringV(self.func, self.fields, self.args)
         return obj
 
 
@@ -441,7 +443,7 @@ class monitor(object):
     def __get__(self, obj, klass=None):
         if isinstance(obj, Monitor) and isinstance(obj, Tools) and isinstance(self.func, command):
             func = MethodType(self.func.func, obj)
-            res = obj._monitoring(func, self.field, self.args, keyword=self.func.keyword)
+            res = obj._monitoring(func, self.field, self.args, keyword=self.func.keyword, unique=self.func.unique)
             return res
         elif isinstance(obj, Monitor):
             func = MethodType(self.func, self)
@@ -857,7 +859,6 @@ class Setting(ParkLY):
         return self
 
 
-
 class MonitorParas(Paras):
     """
     监控方法的配置，
@@ -872,6 +873,7 @@ class MonitorParas(Paras):
                   '_funcName': None,
                   '_monitor_fields': [],
                   '_monitor_func': {},
+                  '_monitor_func_args': {}
                   }
         _error = False
         _root = True
@@ -906,20 +908,26 @@ class Monitor(ParkLY):
                 eval(f'self.{f}')
         return res
 
-    def _monitoring(self, func, monit, arg, keyword=None):
+    def _monitoring(self, func, monit, arg, keyword=None, unique=False):
         if keyword:
             if isinstance(keyword, str):
                 self._command_keyword[keyword] = keyword + '$'
-                self._command_keyword_help[keyword + '$'] = func.__doc__ or '没有使用帮助'
-                self._command_func[keyword + '$'] = func.__name__
+                self._command_info[keyword + '$'] = {
+                    'help': func.__doc__ or '没有使用帮助',
+                    'func': func.__name__,
+                    'unique': unique
+                }
             elif isinstance(keyword, (tuple, list)):
                 keyword = sorted(keyword)
                 keyword.reverse()
                 keys = '$'.join(keyword)
                 for key in keyword:
-                    self._command_keyword[key] = keys
-                self._command_keyword_help[keys] = func.__doc__ or '没有使用帮助'
-                self._command_func[keys] = func.__name__
+                    self._command_keyword[key] = keys + '$'
+                self._command_info[keys + '$'] = {
+                    'help': func.__doc__ or '没有使用帮助',
+                    'func': func.__name__,
+                    'unique': unique
+                }
 
         def monitoring_warps(*args, **kwargs):
             res = func(*args, **kwargs)
@@ -939,22 +947,29 @@ class Monitor(ParkLY):
 
         return monitoring_warps
 
-    def _monitoringV(self, func, monit, keyword=None):
+    def _monitoringV(self, func, monit, arg, keyword=None, unique=False):
         self._monitor_fields.append(monit)
         self._monitor_func[monit] = func.__name__
+        self._monitor_func_args[monit] = arg
         if keyword:
             if isinstance(keyword, str):
                 self._command_keyword[keyword] = keyword + '$'
-                self._command_keyword_help[keyword + '$'] = func.__doc__ or '没有使用帮助'
-                self._command_func[keyword + '$'] = func.__name__
+                self._command_info[keyword + '$'] = {
+                    'help': func.__doc__ or '没有使用帮助',
+                    'func': func.__name__,
+                    'unique': unique
+                }
             elif isinstance(keyword, (tuple, list)):
                 keyword = sorted(keyword)
                 keyword.reverse()
                 keys = '$'.join(keyword)
                 for key in keyword:
-                    self._command_keyword[key] = keys
-                self._command_keyword_help[keys] = func.__doc__ or '没有使用帮助'
-                self._command_func[keys] = func.__name__
+                    self._command_keyword[key] = keys + '$'
+                self._command_info[keys + '$'] = {
+                    'help': func.__doc__ or '没有使用帮助',
+                    'func': func.__name__,
+                    'unique': unique
+                }
 
         def monitoringV_warps(*args, **kwargs):
             res = func(*args, **kwargs)
@@ -967,11 +982,12 @@ class Monitor(ParkLY):
         if key in self._monitor_fields:
             func = self._monitor_func[key]
             func = eval(f'self.{func}')
-            func()
+            args = self._monitor_func_args[key]
+            func(*args[0], **args[1])
         return res
 
 
-class ToolsParas(Paras):
+class CommandParas(Paras):
     """
     工具配置
     """
@@ -979,46 +995,55 @@ class ToolsParas(Paras):
     @staticmethod
     def init():
         _attrs = {
-            '_command_keyword_help': {},
-            '_command_func': {},
+            '_command_info': {
+                'help': '',
+                'func': '',
+                'unique': True
+            },
             '_command_keyword': {},
         }
         _root = True
         return locals()
 
 
-class Tools(ParkLY):
-    _name = 'tools'
-    paras = ToolsParas()
+class Command(ParkLY):
+    _name = 'command'
+    paras = CommandParas()
 
     def init(self, **kwargs):
         """
         初始化，用于对配置进行注册
         """
-        res = super(Tools, self).init(**kwargs)
+        res = super(Command, self).init(**kwargs)
         for f in dir(self):
             if not (f.startswith('__') and f.endswith('__')) and (f in self.__new_attrs_decorator_func__):
                 eval(f'self.{f}')
         eval('self.help')
         return res
 
-    def _command(self, func, keyword):
+    def _command(self, func, keyword, unique=False):
         """
         装饰器 用于封装， 命令启动程序
         配置类command 装饰器使用
         """
         if isinstance(keyword, str):
             self._command_keyword[keyword] = keyword + '$'
-            self._command_keyword_help[keyword + '$'] = func.__doc__ or '没有使用帮助'
-            self._command_func[keyword + '$'] = func.__name__
+            self._command_info[keyword + '$'] = {
+                'help': func.__doc__ or '没有使用帮助',
+                'func': func.__name__,
+                'unique': unique
+            }
         elif isinstance(keyword, (tuple, list)):
             keyword = sorted(keyword)
             keyword.reverse()
             keys = '$'.join(keyword)
             for key in keyword:
-                self._command_keyword[key] = keys
-            self._command_keyword_help[keys] = func.__doc__ or '没有使用帮助'
-            self._command_func[keys] = func.__name__
+                self._command_keyword[key] = keys + '$'
+            self._command_info[keys + '$'] = {
+                'help': func.__doc__ or '没有使用帮助',
+                'func': func.__name__,
+                'unique': unique
+            }
 
         def command_warps(*args, **kwargs):
             res = func(*args, **kwargs)
@@ -1048,6 +1073,7 @@ class Tools(ParkLY):
                 self._start = start
                 self._step = step
                 self._length = len(self.obj)
+                self._epoch = 0
                 return self
 
             def __iter__(self):
@@ -1066,17 +1092,19 @@ class Tools(ParkLY):
             def epoch(self, msg=None, typ=True, start=False):
                 log = logging.debug
                 if not start:
-                    msgs = f"\033[1;32;32m\r当前迭代第{self._start}，{msg or '....'}\033[0m\n"
+                    msgs = f"\033[1;32;32m\r当前迭代第{self._epoch}，{msg or '....'}\033[0m\n"
                     if not typ:
                         log = logging.error
-                        msgs = f"\033[1;31;31m\r当前迭代第{self._start}，{msg or '....'}\033[0m\n"
-                    log(f"""当前迭代第{self._start}，{msg or '....'}""")
+                        msgs = f"\033[1;31;31m\r当前迭代第{self._epoch}，{msg or '....'}\033[0m\n"
+                    log(f"""当前迭代第{self._epoch}，{msg or '....'}""")
                 else:
-                    msgs = f"\033[1;31;31m\r当前正迭代第{self._start}个中....\033[0m"
+                    self._epoch += 1
+                    msgs = f"\033[1;31;31m\r当前正迭代第{self._epoch}个中....\033[0m"
                 if self.epoch_show:
                     print(msgs, end='', flush=True)
 
             def epochs(self, func, args=None, error=None, success=None):
+                res = False, False
                 try:
                     self.epoch(start=True)
                     if isinstance(args, (tuple, list)):
@@ -1118,6 +1146,7 @@ class Tools(ParkLY):
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
+                self._epoch = 0
                 if self.file:
                     value = io.getvalue()
                     with open(file, 'a') as f:
@@ -1154,12 +1183,11 @@ class Tools(ParkLY):
         error = []
         with self.progress(enum=True, epoch_show=True, log_file='./tt.log') as pg:
             command_keyword = self._command_keyword
-            items = map(lambda x: command_keyword[x],
-                        filter(lambda x: x in command_keyword, commands))
-
-            for i, keys in pg(items):
+            for i, keys in pg(commands):
                 args = tuple()
                 index = i + 1
+                if keys not in command_keyword:
+                    continue
                 if index < len(commands) and commands[index] not in command_keyword:
                     args = (commands[index],)
                 if '-h' in commands or '--help' in commands:
@@ -1171,7 +1199,10 @@ class Tools(ParkLY):
                         args = (commands[index],)
                     self.help(*args)
                     break
-                func = self._command_func[keys]
+                info = self._command_info[command_keyword[keys]]
+                if info['unique'] and keys in commands[index:]:
+                    raise IOError("当前指令(%s)只允许执行一次" % keys)
+                func = info['func']
                 func = eval(f'self.{func}')
                 res = pg.epochs(func=func, args=args)
                 if not res[0]:
@@ -1180,3 +1211,14 @@ class Tools(ParkLY):
                 return pg.success()
             else:
                 return pg.error(msg='\n'.join(error))
+
+
+class ToolsParas(Paras):
+
+    @staticmethod
+    def init():
+        pass
+
+
+class Tools(ParkLY):
+    _name = 'tools'
