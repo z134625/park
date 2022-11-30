@@ -1,3 +1,5 @@
+import datetime
+import io
 import json
 import logging
 import os
@@ -6,12 +8,18 @@ import shutil
 import sys
 import copy
 import pickle
+import httpx
+import asyncio
 import warnings
 import configparser
 from io import BytesIO, StringIO
 
 from typing import Union, List, Any, Tuple, Set
 from types import MethodType, FunctionType
+from collections.abc import Iterable
+
+import requests
+
 from . import LISTFILE
 
 
@@ -58,6 +66,7 @@ def listPath(path: str, mode: int = LISTFILE, **kwargs) -> Union[list, map, filt
     """
     列出路径下的所有文件
     :param path: 路径
+    :param mode: 模式
     :param kwargs: 支持使用where进行条件筛选， where 传入参数应为一种函数或者方法，需要的则应返回True， 不需要的返回False
     :return : 一组文件名
     """
@@ -244,7 +253,7 @@ class Paras:
         # 对象的root权限
         _root: bool = False
         # 一些警告，默认开启
-        _warn: bool = True
+        _warn: bool = False
         # 设置属性时，是否覆盖 默认开启
         _cover: bool = True
         # 当对象获取属性时，是否报错 默认开启
@@ -357,8 +366,7 @@ class Paras:
     def __getattr__(self, item):
         if item in self._get_cls_dir() or item.startswith('__') and item.endswith('__'):
             return super(Paras, self).__getattr__(item)
-        else:
-            return False
+        return False
 
     def _update(self, sel=False):
         if self._obj:
@@ -371,20 +379,21 @@ class command(object):
     """
 
     """
-    __slots__ = ('keyword', 'unique', 'args', 'func')
+    __slots__ = ('keyword', 'unique', 'priority', 'args', 'func')
 
-    def __init__(self, keyword, unique=False):
+    def __init__(self, keyword, unique=False, priority=None):
         self.keyword = keyword
         self.unique = unique
+        self.priority = priority
 
     def __call__(self, func):
         self.func = func
         return self
 
     def __get__(self, obj, klass=None):
-        if isinstance(obj, Tools):
+        if isinstance(obj, Command):
             func = MethodType(self.func, obj)
-            return obj._command(func, self.keyword, self.unique)
+            return obj._command(func, self.keyword, self.unique, self.priority)
 
 
 class monitorV(object):
@@ -406,11 +415,12 @@ class monitorV(object):
         return self
 
     def __get__(self, obj, klass=None):
-        if isinstance(obj, Monitor) and isinstance(obj, Tools) and isinstance(self.func, command):
+        if isinstance(obj, Monitor) and isinstance(obj, Command) and isinstance(self.func, command):
             func = MethodType(self.func.func, obj)
             return obj._monitoringV(func, self.fields, self.args, keyword=self.func.keyword, unique=self.func.unique)
         elif isinstance(obj, Monitor):
-            return obj._monitoringV(self.func, self.fields, self.args)
+            func = MethodType(self.func, obj)
+            return obj._monitoringV(func, self.fields, self.args)
         return obj
 
 
@@ -441,15 +451,64 @@ class monitor(object):
         return self
 
     def __get__(self, obj, klass=None):
-        if isinstance(obj, Monitor) and isinstance(obj, Tools) and isinstance(self.func, command):
+        if isinstance(obj, Monitor) and isinstance(obj, Command) and isinstance(self.func, command):
             func = MethodType(self.func.func, obj)
             res = obj._monitoring(func, self.field, self.args, keyword=self.func.keyword, unique=self.func.unique)
             return res
         elif isinstance(obj, Monitor):
-            func = MethodType(self.func, self)
+            func = MethodType(self.func, obj)
             res = obj._monitoring(func, self.field, self.args)
             return res
         return obj
+
+
+def _inherit_parent(inherits, attrs):
+    bases = []
+    all_attrs = {}
+    _attrs = {}
+    if isinstance(inherits, str):
+        parent = env[attrs.get('_inherit')]
+        if not isinstance(parent, Basics):
+            parent = parent.__class__
+        bases = (parent,)
+        all_attrs.update(parent.paras.init())
+        _attrs.update(parent.paras._attrs)
+        if '_attrs' in all_attrs:
+            all_attrs['_attrs'].update(_attrs)
+        else:
+            all_attrs['_attrs'] = _attrs
+        if 'paras' in attrs and isinstance(attrs['paras'], Paras):
+            _attr = attrs['paras']._attrs
+            all_attrs.update(attrs['paras'].init())
+            all_attrs['_attrs'].update(_attrs)
+            attrs['paras'].update(all_attrs)
+        else:
+            paras = Paras()
+            paras.update(all_attrs)
+            attrs['paras'] = paras
+    elif isinstance(inherits, (tuple, list)):
+        for inherit in inherits:
+            parent = env[inherit]
+            if not isinstance(parent, Basics):
+                parent = parent.__class__
+            all_attrs.update(parent.paras.init())
+            _attrs.update(parent.paras._attrs)
+            all_attrs['_attrs'].update(_attrs)
+            bases += [parent]
+        if 'paras' in attrs and isinstance(attrs['paras'], Paras):
+            _attr = attrs['paras']._attrs
+            all_attrs.update(attrs['paras'].init())
+            if '_attrs' in all_attrs:
+                all_attrs['_attrs'].update(_attrs)
+            else:
+                all_attrs['_attrs'] = _attrs
+            attrs['paras'].update(all_attrs)
+        else:
+            paras = Paras()
+            paras.update(all_attrs)
+            attrs['paras'] = paras
+        bases = tuple(bases)
+    return bases, attrs
 
 
 class Basics(type):
@@ -468,9 +527,6 @@ class Basics(type):
             if attrs.get('_name') and not attrs.get('_inherit'):
                 if 'paras' not in attrs or ('paras' in attrs and not isinstance(attrs['paras'], Paras)):
                     attrs['paras'] = Paras()
-            if attrs.get('_inherit'):
-                if 'paras' in attrs and not isinstance(attrs['paras'], Paras):
-                    attrs.pop('paras')
             for key, val in attrs.items():
                 if key not in ['__module__', '__qualname__']:
                     if isinstance(val, (monitorV, monitor, command)):
@@ -481,44 +537,17 @@ class Basics(type):
         res = type.__new__(mcs, name, bases, attrs)
         if attrs.get('_name') and attrs.get('_inherit'):
             inherits = attrs.get('_inherit')
-            if isinstance(inherits, str):
-                parent = env[attrs.get('_inherit')]
-                if not isinstance(parent, Basics):
-                    parent = parent.__class__
-                bases = (parent,)
-            elif isinstance(inherits, (tuple, list)):
-                bases = []
-                _attrs = {}
-                for inherit in inherits:
-                    parent = env[inherit]
-                    if not isinstance(parent, Basics):
-                        parent = parent.__class__
-                    _attrs.update(parent.paras._attrs)
-                    bases += [parent]
-                if 'paras' in attrs and isinstance(attrs['paras'], Paras):
-                    attrs['paras'].update({
-                        '_attrs': _attrs
-                    })
-                else:
-                    paras = bases[-1].paras
-                    paras.update({
-                        '_attrs': _attrs
-                    })
-                    attrs['paras'] = paras
-                bases = tuple(bases)
-            res = type.__new__(mcs, name, bases, attrs)
+            assert isinstance(inherits, (str, tuple, list))
+            _bases, attrs = _inherit_parent(inherits, attrs)
+            res = type.__new__(mcs, name, _bases or bases, attrs)
             env(name=attrs.get('_name'), cl=res)
         elif attrs.get('_name'):
             env(name=attrs.get('_name'), cl=res)
         elif attrs.get('_inherit'):
             inherit = attrs.get('_inherit')
-            if isinstance(inherit, (tuple, list)):
-                inherit = inherit[0]
-            parent = env[inherit]
-            if not isinstance(parent, Basics):
-                parent = parent.__class__
-            bases = (parent,)
-            res = type.__new__(mcs, name, bases, attrs)
+            assert isinstance(inherit, str)
+            _bases, attrs = _inherit_parent(inherit, attrs)
+            res = type.__new__(mcs, name, _bases or bases, attrs)
             env(name=inherit, cl=res, inherit=True)
         setattr(res, 'env', env)
         return res
@@ -645,8 +674,9 @@ class ParkLY(object, metaclass=Basics):
             for val in value:
                 self._root_func(val)
         if key not in set(dir(self)).difference(set(self.paras._attrs)):
-            super(ParkLY, self).__setattr__(key, value)
+            res = super(ParkLY, self).__setattr__(key, value)
             self.paras._attrs.update({key: value})
+            return res
         if key == 'paras' and sys._getframe(1).f_code.co_name == 'with_paras':
             return super(ParkLY, self).__setattr__(key, value)
 
@@ -713,22 +743,28 @@ class ParkLY(object, metaclass=Basics):
         """
         return self.paras.context
 
-    def save(self, path: str = None, data: Any = None) -> bytes:
+    def save(self, file: Union[str, io.FileIO, io.BytesIO] = None,
+             data: Any = None) -> Union[str, io.FileIO, io.BytesIO]:
         """
-        :param path: 保持序列化数据位置， 不提供则不保存，
+        :param file: 保持序列化数据位置， 不提供则不保存，
         :param data: 需要序列化的数据， 不提供则序列化加载的配置文件内容
         :return : 序列化后的数据
         """
         if not data:
             data: dict = self.paras._attrs
         pickle_data = pickle.dumps(data)
-        if path:
-            dirs = os.path.dirname(path)
-            mkdir(dirs)
-            f = open(path, 'wb')
-            pickle.dump(data, f)
-            f.close()
-        return pickle_data
+        if file:
+            if isinstance(file, str):
+                dirs = os.path.dirname(file)
+                mkdir(dirs)
+                f = open(file, 'wb')
+                pickle.dump(data, f)
+                f.close()
+            elif isinstance(file, io.BytesIO):
+                file.write(pickle_data)
+            elif isinstance(file, io.FileIO):
+                file.write(pickle_data)
+        return file
 
     def load(self, path: str = None, data: Any = None) -> Union[dict, Any]:
         """
@@ -930,6 +966,8 @@ class Monitor(ParkLY):
                 }
 
         def monitoring_warps(*args, **kwargs):
+            root = self.paras._root
+            self.paras.update({'_root': True})
             res = func(*args, **kwargs)
             self._return = res
             if isinstance(monit, str):
@@ -943,6 +981,7 @@ class Monitor(ParkLY):
                     monit_func(*arg[0], **arg[1])
             self._funcName = None
             self._return = False
+            self.paras.update({'_root': root})
             return res
 
         return monitoring_warps
@@ -1021,7 +1060,7 @@ class Command(ParkLY):
         eval('self.help')
         return res
 
-    def _command(self, func, keyword, unique=False):
+    def _command(self, func, keyword, unique=False, priority=None):
         """
         装饰器 用于封装， 命令启动程序
         配置类command 装饰器使用
@@ -1142,7 +1181,6 @@ class Command(ParkLY):
                 print(msgs)
 
             def __enter__(self):
-
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1175,13 +1213,15 @@ class Command(ParkLY):
             else:
                 print(f"""{order}: \n 没有该帮助， 请检查""")
 
-    def main(self):
+    def main(self, com=None, log_path=None):
         """
         命令行启动主程序
         """
         commands = sys.argv[1:]
+        if com:
+            commands = com
         error = []
-        with self.progress(enum=True, epoch_show=True, log_file='./tt.log') as pg:
+        with self.progress(enum=True, epoch_show=True, log_file=log_path) as pg:
             command_keyword = self._command_keyword
             for i, keys in pg(commands):
                 args = tuple()
@@ -1217,8 +1257,229 @@ class ToolsParas(Paras):
 
     @staticmethod
     def init():
-        pass
+        _attrs = {
+            '_': 1,
+            'method': 'GET',
+            '_method': 'GET',
+            'url': '',
+            '_url': '',
+            'error_url': [],
+            'items': {},
+            'headers': {},
+        }
+        return locals()
 
 
 class Tools(ParkLY):
     _name = 'tools'
+    _inherit = ['monitor', 'command']
+    paras = ToolsParas()
+
+    def try_response(self, func):
+        method = self._method
+
+        def warp(*args, **kwargs):
+            response = None
+            _ = kwargs.get('_', 0)
+            url = kwargs.get('url', '')
+            kwargs.pop('_')
+            self._ = _ + 1
+            error = False
+            try:
+                response = func(*args, **kwargs)
+            except Exception as e:
+                error = True
+                logging.error(msg=f'{_ + 1} 次 ({method})请求失败 请求地址({url}) \n 原因：{e}')
+            finally:
+                if response is None:
+                    if error:
+                        logging.debug(msg=f'{_ + 1} 次 ({method})未请求 请求地址({url})')
+                else:
+                    if response.status_code == 200:
+                        logging.debug(msg=f'{_ + 1} 次 ({method})请求成功 请求地址({url})')
+                        return self._success_response(response)
+                    else:
+                        logging.debug(msg=f'{_ + 1} 次 ({method})请求失败({response.status_code}) 请求地址({url})')
+                self.error_url.append(url)
+                return response
+        return warp
+
+    def try_response_async(self, func):
+        method = self._method
+
+        async def warp(*args, **kwargs):
+            response = None
+            _ = kwargs.get('_', 0)
+            url = kwargs.get('url', '')
+            kwargs.pop('_')
+            error = False
+            try:
+                response = await func(*args, **kwargs)
+            except Exception as e:
+                error = True
+                logging.error(msg=f'{_ + 1} 次 ({method})请求失败 请求地址({url}) \n 原因：{e}')
+            finally:
+                if response is None:
+                    if error:
+                        logging.debug(msg=f'{_ + 1} 次 ({method})未请求 请求地址({url})')
+                else:
+                    if response.status_code == 200:
+                        logging.debug(msg=f'{_ + 1} 次 ({method})请求成功 请求地址({url})')
+                        return self._parse(response, _=_ + 1)
+                    else:
+                        logging.debug(msg=f'{_ + 1} 次 ({method})请求失败({response.status_code}) 请求地址({url})')
+                self.error_url.append(url)
+                return response
+        return warp
+
+    @monitor(field='_parse')
+    def _success_response(self, response):
+        return response
+
+    def _request(self, urls, is_async=False, headers=None):
+        if headers is None:
+            headers = self.headers
+        _async_request = self.try_response_async(self._async_request)
+        _normal_request = self.try_response(self._normal_request)
+        if isinstance(urls, str):
+            if is_async:
+                asyncio.run(self._async_request(urls, headers))
+            else:
+                _normal_request(urls, headers)
+        elif isinstance(urls, Iterable):
+            if is_async:
+                loop = asyncio.get_event_loop()
+                tasks = [_async_request(url, headers, _=_) for _, url in enumerate(urls)]
+                loop.run_until_complete(asyncio.wait(tasks))
+            else:
+                for _, url in enumerate(urls):
+                    _normal_request(url, headers, _=_)
+
+    def _normal_request(self, url, headers):
+        self._url = url
+        method = self._method
+        response = None
+        if method == 'GET':
+            response = requests.get(url=url, headers=headers)
+        elif method == 'POST':
+            response = requests.post(url=url, headers=headers)
+        return response
+
+    async def _async_request(self, url, headers):
+        self._url = url
+        method = self._method
+        async with httpx.AsyncClient(headers=headers) as client:
+            response = None
+            if method == 'GET':
+                response = await client.get(url=url)
+            elif method == 'POST':
+                response = await client.post(url=url)
+        return response
+
+    def parse(self, response):
+        return response
+
+    def urls(self):
+        return self.url
+
+    def request(self, is_async=False):
+        return self._request(urls=self.urls(), is_async=is_async)
+
+    def _parse(self, response=None, _=0):
+        bi = BytesIO()
+        if not response:
+            response = self._return
+        if hasattr(self, f'parse{_}'):
+            res = eval(f'self.parse{_}(response)')
+        else:
+            res = self.parse(response)
+        for i, data in enumerate(res):
+            path = f'datas/page-{_}/data_{i}.park'
+            self.save(path, data)
+        # self.items.update({
+        #     f'{self._}': bi
+        # })
+
+    @monitorV('method')
+    def _method_upper(self):
+        self._method = self.method.upper()
+
+    def exists_rename(self, path: str, paths: list = None,
+                      clear: bool = False,
+                      dif: bool = False) -> str:
+        if not clear:
+            if os.path.isdir(path):
+                if path.endswith('/'):
+                    path = path[:-1]
+                names = listPath(path=os.path.dirname(path), splicing=False, list=True)
+                return os.path.join(os.path.dirname(path), self.generate_name(name=os.path.basename(path),
+                                                                              names=names, dif=dif))
+            if os.path.isfile(path):
+                names = listPath(path=os.path.dirname(path), splicing=False, list=True)
+                return os.path.join(os.path.dirname(path), self.generate_name(name=os.path.basename(path),
+                                                                              names=names, mode=1, dif=dif))
+            else:
+                names = []
+                if paths:
+                    names = paths
+                return self.generate_name(name=path, names=names, dif=dif)
+        else:
+            name, suffix = os.path.splitext(path)
+            pattern = re.compile(r'(.*) \([0-9]+\)')
+            res = re.search(pattern=pattern, string=name)
+            if res:
+                name_head = res.group(1)
+                return name_head + suffix
+            else:
+                return path
+
+    def generate_name(self, name: str, names: Iterable, mode=0, dif=False) -> str:
+        suffix = ''
+        if mode == 1:
+            name, suffix = os.path.splitext(name)
+            names = list(map(lambda x: os.path.splitext(x)[0], filter(lambda x: os.path.splitext(x)[1] == suffix, names)))
+        if name in names:
+            start = ' (1)'
+            pattern_number = re.compile(r'.* \((\d+)\)')
+            pattern_letter = re.compile(r'.* \(([A-Z]+)\)')
+            pattern = pattern_number
+            if dif:
+                start = ' (A)'
+                pattern = pattern_letter
+            number = re.match(pattern=pattern, string=name)
+            if number:
+                number = number.group(1)
+                if not dif:
+                    new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
+                else:
+                    if not number.endswith('Z'):
+                        new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number[:-1] + chr(ord(number[-1]) + 1)), name)
+                    else:
+                        new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number + 'A'), name)
+            else:
+                new_name = name + start
+            if new_name in names:
+                return self.generate_name(new_name, names, mode=0, dif=dif)
+            return new_name + suffix
+        return name + suffix
+
+
+class RealTimeUpdateParas(Paras):
+    @staticmethod
+    def init() -> dict:
+        _attrs = {
+            '_uid': None,
+            '_start_time': datetime.datetime.now,
+            '_parent_pid': None,
+            '_sub_pid': None
+        }
+        return locals()
+
+
+class RealTimeUpdate(ParkLY):
+    _name = 'realtime'
+    _inherit = ['monitor']
+    paras = RealTimeUpdateParas()
+
+
+env.load()
