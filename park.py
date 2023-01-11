@@ -12,7 +12,8 @@ class New(ParkLY):
         # print(sys._getframe(1).f_code.co_name)  # 调用该函数的函数名字，如果没有被调用，则返回<module>
         # print(sys._getframe(0).f_lineno)  # 当前函数的行号
         # print(sys._getframe(1).f_lineno)  # 调用该函数的行号
-        print(dir())
+        print(
+            ())
 
     def pas(self):
         print(3)
@@ -33,7 +34,7 @@ class New2(ParkLY):
         super(New2, self).pas()
 
 
-class New4(ParkLY):
+class New4(New):
     _inherit = 'New'
     root_func = ['name']
     parass = 123
@@ -46,7 +47,6 @@ class New4(ParkLY):
         # print(sys._getframe(1).f_lineno)  # 调用该函数的行号
         print(1)
         super(New4, self).pas()
-
 
 class New3(ParkLY):
     _name = 'New3'
@@ -77,40 +77,43 @@ class New3(ParkLY):
 
 if __name__ == "__main__":
     env.load()
-    New3(_error=True, _warn=False, _cover=True)
-    new = env['New3']
+    # New3(_error=True, _warn=False, _cover=True)
+    # New.pas = New4.pas
+    # New()
+    new = env['New']
+    new.pas(park_time=True)
+    print(new.speed_info)
 
-    @new(root=True)
-    def ps(self):
-        s = self.env['inherit'].sudo()
-        s.park()
-
-        self.root_func = []
-        print(self.root_func)
-        print(self.paras)
-        print(self)
-        self.names()
-        self.open(r'.\conf.txt')
-        print(self._a)
-        print(self)
-        # self.paras._set_list = ['1']
-        print(self.paras._attrs)
-        print(self.a)
-        print(self.paras.update({
-            '_attrs': {'a': 10}
-        }))
-        print(self.paras._attrs)
-        print(self.a)
-        print(self.paras._obj)
-        print(self.a)
+    # @new(root=True)
+    # def ps(self):
+    #     s = self.env['inherit'].sudo()
+    #     s.park()
+    #
+    #     self.root_func = []
+    #     print(self.root_func)
+    #     print(self.paras)
+    #     print(self)
+    #     self.names()
+    #     self.open(r'.\conf.txt')
+    #     print(self._a)
+    #     print(self)
+    #     # self.paras._set_list = ['1']
+    #     print(self.paras._attrs)
+    #     print(self.a)
+    #     print(self.paras.update({
+    #         '_attrs': {'a': 10}
+    #     }))
+    #     print(self.paras._attrs)
+    #     print(self.a)
+    #     print(self.paras._obj)
+    #     print(self.a)
         # s = self.env['tools'].config(data='das阿斯顿', mode=2, timeout=None)
         # t = s.sudo()
         # print(t.result)
         # print(s.result)
     # print(new.with_paras(ds=True).paras.ds)
-    ps()
-    print(ne)
-
+    # ps()
+    # print(ne)
     # new.with_paras(gl=True, _warn=True, _cover=True)
     # new.paras.update({
     #     'root_func': [],
@@ -121,7 +124,7 @@ if __name__ == "__main__":
     # })
     # print(new.a)
 
-    obj = env['monitor']
-    print(obj)
+    # obj = env['monitor']
+    # print(obj)
     # obj.attr()
 

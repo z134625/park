@@ -8,7 +8,10 @@ import shutil
 import sys
 import copy
 import pickle
+import psutil
+import time
 import httpx
+import requests
 import asyncio
 import warnings
 import configparser
@@ -16,9 +19,10 @@ from io import BytesIO, StringIO
 
 from typing import Union, List, Any, Tuple, Set
 from types import MethodType, FunctionType
-from collections.abc import Iterable
 
-import requests
+from collections.abc import Iterable
+from httpx import Response
+from multiprocessing import pool, Process
 
 from . import LISTFILE
 
@@ -94,26 +98,56 @@ def listPath(path: str, mode: int = LISTFILE, **kwargs) -> Union[list, map, filt
     return files
 
 
-def get_size(obj, seen=None):
-    # From
-    # Recursively finds size of objects
-    size = sys.getsizeof(obj)
-    if seen is None:
-        seen = set()
-    obj_id = id(obj)
-    if obj_id in seen:
-        return 0
-    # Important mark as seen *before* entering recursion to gracefully handle
-    # self-referential objects
-    seen.add(obj_id)
-    if isinstance(obj, dict):
-        size += sum([get_size(v, seen) for v in obj.values()])
-        size += sum([get_size(k, seen) for k in obj.keys()])
-    elif hasattr(obj, '__dict__'):
-        size += get_size(obj.__dict__, seen)
-    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
-        size += sum([get_size(i, seen) for i in obj])
-    return size
+def formatSize(bytes_: Union[float, int]):
+    """
+    :param bytes_: 数据字节数
+    :return:  返回数据字节转化大小， kb, M, G
+    _formatSize(1024)
+    '1.000KB'
+    _formatSize(1024 * 1024)
+    '1.000M'
+    _formatSize(1000)
+    '0.977KB'
+    _formatSize("fs")
+    传入的字节格式不对
+    'Error'
+    """
+    try:
+        bytes_ = float(bytes_)
+        kb = bytes_ / 1024
+    except ValueError:
+        print("传入的字节格式不对")
+        return "Error"
+
+    if kb >= 1024:
+        M = kb / 1024
+        if M >= 1024:
+            G = M / 1024
+            return "%.3fG" % G
+        else:
+            return "%.3fM" % M
+    else:
+        return "%.3fKB" % kb
+
+
+def get_size(item):
+    def _get_size(obj, seen=None):
+        size = sys.getsizeof(obj)
+        if seen is None:
+            seen = set()
+        obj_id = id(obj)
+        if obj_id in seen:
+            return 0
+        seen.add(obj_id)
+        if isinstance(obj, dict):
+            size += sum([_get_size(v, seen) for v in obj.values()])
+            size += sum([_get_size(k, seen) for k in obj.keys()])
+        elif hasattr(obj, '__dict__'):
+            size += _get_size(obj.__dict__, seen)
+        elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+            size += sum([_get_size(i, seen) for i in obj])
+        return size
+    return formatSize(_get_size(item))
 
 
 def readPy(file: str) -> dict:
@@ -174,9 +208,10 @@ def setAttrs(obj: Any, self: bool = False, cover: bool = True, warn: bool = True
 
 
 class RegisterEnv:
-    __slots__ = ('_mapping',)
+    __slots__ = ('_mapping', 'ios')
 
     def __init__(self):
+        self.ios = {}
         self._mapping: dict = {}
 
     def __call__(self, name, cl, warn=True, inherit=False):
@@ -214,8 +249,37 @@ class RegisterEnv:
     def apps(self):
         return list(self._mapping.keys())
 
+    def io_registry(self, ios):
+        for item in ios:
+            self.ios[item[0]] = item[1]()
+        return Io()
+
 
 env = RegisterEnv()
+
+
+class Io:
+    _io_key = None
+    _io = None
+
+    def __call__(self, io_id=None):
+        self._io_key = io_id
+        self._io = env.ios.get(io_id, None)
+        return self
+
+    def __getitem__(self, item):
+        return Io()(io_id=item)
+
+    def clear(self):
+        if self._io:
+            io_obj = env.ios[self._io_key]
+            env.ios[self._io_key] = io_obj.__class__()
+
+    def write(self, msg):
+        self._io.write(msg);
+
+    def getvalue(self):
+        return self._io.getvalue()
 
 
 class Paras:
@@ -261,7 +325,25 @@ class Paras:
         # 设置属性的列表， 在设置成功后将删除
         _set_list: List[str] = []
         # 设置成功的属性和值
-        _attrs: dict = {}
+        _attrs: dict = {
+            '_io': env.io_registry([('log', StringIO), ('file', BytesIO)]),
+            'save_path': './Park',
+            '_save_path': './Park',
+            'save_file': '',
+            '_save_file': 'Park',
+            'save_suffix': {},
+            '_save_suffix': {
+                'file': '',
+                'log': 'log'
+            },
+            'save_io': [],
+            '_save_io': {'file', 'log'},
+            'save_mode': '',
+            '_save_mode': 'w',
+            'save_encoding': '',
+            '_save_encoding': 'utf-8',
+            'speed_info': {},
+        }
         # 配置上下文
         context: dict = {}
         # 管理员权限方法
@@ -371,7 +453,15 @@ class Paras:
     def _update(self, sel=False):
         if self._obj:
             obj = env[self._obj]
-            return setAttrs(obj=obj, self=sel)
+            obj = setAttrs(obj=obj, self=sel)
+            for item in obj.save_io:
+                obj._save_io.add(item)
+            obj._save_suffix.update(obj.save_suffix)
+            obj._save_path = obj.save_path if obj.save_path else obj._save_path
+            obj._save_encoding = obj.save_encoding if obj.save_encoding else obj._save_encoding
+            obj._save_mode = obj.save_mode if obj.save_mode else obj._save_mode
+            obj._save_file = obj.save_file if obj.save_file else obj._save_file
+            return obj
         return None
 
 
@@ -451,6 +541,10 @@ class monitor(object):
         return self
 
     def __get__(self, obj, klass=None):
+        """
+        obj: 被装饰方法的对象
+        """
+        # 判断当前函数 是否被其他类似装饰器装饰
         if isinstance(obj, Monitor) and isinstance(obj, Command) and isinstance(self.func, command):
             func = MethodType(self.func.func, obj)
             res = obj._monitoring(func, self.field, self.args, keyword=self.func.keyword, unique=self.func.unique)
@@ -511,6 +605,31 @@ def _inherit_parent(inherits, attrs):
     return bases, attrs
 
 
+class reckon_by_time_run(object):
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(self, obj, klass=None):
+        def warp(*args, **kwargs):
+            park_time = kwargs.get('park_time')
+            if 'park_time' in kwargs and park_time:
+                start_time = time.time()
+                kwargs.pop('park_time')
+            if isinstance(self.func, (monitorV, monitor, command)):
+                self.func = self.func.func
+            func = MethodType(self.func, obj)
+            res = func(*args, **kwargs)
+            if park_time:
+                end_time = time.time()
+                obj.speed_info.update({
+                    func.__name__: {
+                        'time': end_time - start_time + 0.1 - 0.1
+                    }
+                })
+            return res
+        return warp
+
+
 class Basics(type):
 
     def __new__(mcs, name, bases, attrs):
@@ -521,34 +640,41 @@ class Basics(type):
         """
         mappings = set()
         mappings_func = set()
+        _attrs = attrs.items()
         if attrs['__qualname__'] != 'ParkLY':
             if not attrs.get('_name') and not attrs.get('_inherit'):
                 raise AttributeError("必须设置_name属性")
             if attrs.get('_name') and not attrs.get('_inherit'):
                 if 'paras' not in attrs or ('paras' in attrs and not isinstance(attrs['paras'], Paras)):
                     attrs['paras'] = Paras()
-            for key, val in attrs.items():
+            for key, val in _attrs:
                 if key not in ['__module__', '__qualname__']:
+                    if callable(val):
+                        attrs[key] = reckon_by_time_run(val)
                     if isinstance(val, (monitorV, monitor, command)):
                         mappings_func.add(key)
                     mappings.add(key)
         attrs['__new_attrs__'] = mappings
         attrs['__new_attrs_decorator_func__'] = mappings_func
         res = type.__new__(mcs, name, bases, attrs)
+        # 存在_name _inherit 属性 ->（说明创造的类是继承父类的所有信息，并生成一个新类）
         if attrs.get('_name') and attrs.get('_inherit'):
             inherits = attrs.get('_inherit')
             assert isinstance(inherits, (str, tuple, list))
             _bases, attrs = _inherit_parent(inherits, attrs)
             res = type.__new__(mcs, name, _bases or bases, attrs)
             env(name=attrs.get('_name'), cl=res)
+        # 此时仅创建一个类不继承任何属性
         elif attrs.get('_name'):
             env(name=attrs.get('_name'), cl=res)
+        # 仅继承，为父类增加内容，覆盖env环境中的对应内容
         elif attrs.get('_inherit'):
             inherit = attrs.get('_inherit')
             assert isinstance(inherit, str)
             _bases, attrs = _inherit_parent(inherit, attrs)
             res = type.__new__(mcs, name, _bases or bases, attrs)
             env(name=inherit, cl=res, inherit=True)
+        # 为每个构造的类增加 env属性 （self.env）
         setattr(res, 'env', env)
         return res
 
@@ -626,6 +752,11 @@ class ParkLY(object, metaclass=Basics):
         self.env._mapping.update({
             self._name: self
         })
+        logging.basicConfig(filemode='w', level=logging.DEBUG,
+                            format="[%(name)s]-[%(levelname)s]: [%(pathname)s](%(filename)s:%(module)s) \n"
+                                   "\t%(funcName)s - %(lineno)d \t : %(asctime)s \n"
+                                   "\tmsg: %(message)s",
+                            stream=self._io['log']._io)
 
     @classmethod
     def _root_func(cls, func: Union[Any, str]):
@@ -649,18 +780,12 @@ class ParkLY(object, metaclass=Basics):
                     self.root_func = self.paras.root_func
                 if item in self.paras.root_func and \
                         (
-                         call_name not in self.__new_attrs__ and
-                         call_name not in dir(ParkLY)
+                                call_name not in self.__new_attrs__ and
+                                call_name not in dir(ParkLY)
                         ):
                     if not self.paras._root and (hasattr(res, '__self__') and not isinstance(res.__self__, ParkLY)):
                         raise AttributeError('此方法(%s)为管理员方法，不可调用' % item)
                 return res
-            elif item.startswith("_") and not self.paras._root and \
-                    (
-                     call_name not in self.__new_attrs__ and
-                     call_name not in (dir(self))
-                    ):
-                raise KeyError("不允许获取私有属性(%s)" % item)
             return super(ParkLY, self).__getattribute__(item)
         except AttributeError as e:
             if self.paras._error:
@@ -679,6 +804,20 @@ class ParkLY(object, metaclass=Basics):
             return res
         if key == 'paras' and sys._getframe(1).f_code.co_name == 'with_paras':
             return super(ParkLY, self).__setattr__(key, value)
+
+    # def __del__(self):
+    #     for key in self._save_io:
+    #         value = self._io[key].getvalue()
+    #         save_path = os.path.join(self._save_path, key)
+    #         mkdir(save_path)
+    #         file = os.path.join(save_path, self._save_file +
+    #                             (f'.{self._save_suffix.get(key)}' if self._save_suffix.get(
+    #                                 key) else self._save_suffix.get(key, '')))
+    #         mode = self._save_mode
+    #         if isinstance(value, bytes):
+    #             mode = self._save_mode + 'b'
+    #         with open(file, mode, encoding=self._save_encoding if 'b' not in mode else None) as f:
+    #             f.write(value)
 
     def sudo(self, gl: bool = False) -> Any:
         """
@@ -929,6 +1068,7 @@ class Monitor(ParkLY):
 >>>            return 100
 >>>
 >>>        def monitor1(self):
+>>>            # 内置一个_return属性用来接受被 监控函数的返回值，在该方法执行结束自动将该属性置为False
 >>>            print(self._return)
 >>>    test = Test()
 >>>    test.test1()
@@ -1090,16 +1230,9 @@ class Command(ParkLY):
 
         return command_warps
 
-    @staticmethod
-    def progress(enum=True, epoch_show=True, log_file=None):
-        io = StringIO()
+    def progress(self, enum=True, epoch_show=True, log_file=None):
+        _io = self._io['log']
         file = log_file
-
-        logging.basicConfig(filemode='w', level=logging.DEBUG,
-                            format="[%(name)s]-[%(levelname)s]: [%(pathname)s](%(filename)s:%(module)s) \n" \
-                                   "\t%(funcName)s - %(lineno)d \t : %(asctime)s \n" \
-                                   "\tmsg: %(message)s",
-                            stream=io)
 
         class _ParkProgress(object):
 
@@ -1186,12 +1319,12 @@ class Command(ParkLY):
             def __exit__(self, exc_type, exc_val, exc_tb):
                 self._epoch = 0
                 if self.file:
-                    value = io.getvalue()
+                    value = _io.getvalue()
                     with open(file, 'a') as f:
                         f.write('=' * 25 + 'start' + '=' * 25 + '\n')
                         f.write(value)
                         f.write('=' * 25 + 'end' + '=' * 25 + '\n')
-                io.close()
+                _io.clear()
                 del self
 
         return _ParkProgress(file, epoch_show)
@@ -1266,6 +1399,24 @@ class ToolsParas(Paras):
             'error_url': [],
             'items': {},
             'headers': {},
+            'number_dict': {
+                '0': '零',
+                '1': '壹',
+                '2': '贰',
+                '3': '叁',
+                '4': '肆',
+                '5': '伍',
+                '6': '陆',
+                '7': '柒',
+                '8': '捌',
+                '9': '玖',
+                '10': '拾',
+                '100': '佰',
+                '1000': '仟',
+                '10000': '万',
+                '100000000': '亿',
+                '-1': '',
+            }
         }
         return locals()
 
@@ -1281,7 +1432,7 @@ class Tools(ParkLY):
         def warp(*args, **kwargs):
             response = None
             _ = kwargs.get('_', 0)
-            url = kwargs.get('url', '')
+            url = kwargs.get('url', None) or args[0]
             kwargs.pop('_')
             self._ = _ + 1
             error = False
@@ -1302,6 +1453,7 @@ class Tools(ParkLY):
                         logging.debug(msg=f'{_ + 1} 次 ({method})请求失败({response.status_code}) 请求地址({url})')
                 self.error_url.append(url)
                 return response
+
         return warp
 
     def try_response_async(self, func):
@@ -1309,9 +1461,10 @@ class Tools(ParkLY):
 
         async def warp(*args, **kwargs):
             response = None
-            _ = kwargs.get('_', 0)
-            url = kwargs.get('url', '')
-            kwargs.pop('_')
+            _ = kwargs.get('_', None)
+            url = kwargs.get('url', None) or args[0]
+            if '_' in kwargs:
+                kwargs.pop('_')
             error = False
             try:
                 response = await func(*args, **kwargs)
@@ -1330,6 +1483,7 @@ class Tools(ParkLY):
                         logging.debug(msg=f'{_ + 1} 次 ({method})请求失败({response.status_code}) 请求地址({url})')
                 self.error_url.append(url)
                 return response
+
         return warp
 
     @monitor(field='_parse')
@@ -1343,7 +1497,7 @@ class Tools(ParkLY):
         _normal_request = self.try_response(self._normal_request)
         if isinstance(urls, str):
             if is_async:
-                asyncio.run(self._async_request(urls, headers))
+                asyncio.run(_async_request(urls, headers))
             else:
                 _normal_request(urls, headers)
         elif isinstance(urls, Iterable):
@@ -1376,7 +1530,7 @@ class Tools(ParkLY):
                 response = await client.post(url=url)
         return response
 
-    def parse(self, response):
+    def parse(self, response: Union[Response]):
         return response
 
     def urls(self):
@@ -1393,9 +1547,10 @@ class Tools(ParkLY):
             res = eval(f'self.parse{_}(response)')
         else:
             res = self.parse(response)
-        for i, data in enumerate(res):
-            path = f'datas/page-{_}/data_{i}.park'
-            self.save(path, data)
+        if isinstance(res, Iterable):
+            for i, data in enumerate(res):
+                path = f'datas/page-{_}/data_{i}.park'
+                self.save(path, data)
         # self.items.update({
         #     f'{self._}': bi
         # })
@@ -1437,7 +1592,8 @@ class Tools(ParkLY):
         suffix = ''
         if mode == 1:
             name, suffix = os.path.splitext(name)
-            names = list(map(lambda x: os.path.splitext(x)[0], filter(lambda x: os.path.splitext(x)[1] == suffix, names)))
+            names = list(
+                map(lambda x: os.path.splitext(x)[0], filter(lambda x: os.path.splitext(x)[1] == suffix, names)))
         if name in names:
             start = ' (1)'
             pattern_number = re.compile(r'.* \((\d+)\)')
@@ -1463,6 +1619,110 @@ class Tools(ParkLY):
             return new_name + suffix
         return name + suffix
 
+    def number_to_chinese(self, number, cash=False):
+        return self._number_to_chinese(number, cash)
+
+    def _number_to_chinese(self, number: Union[int, float], cash: bool):
+        base = 10000
+        base_number = str(number)
+        str_list = []
+        chinese_number = []
+        float_chinese = ''
+        int_number = base_number
+        float_number = '0'
+        if '.' in base_number:
+            int_number, float_number = base_number.split('.')
+        int_number = int(int_number)
+        float_number = float_number
+        billion = False
+        frequency = 1
+        while True:
+            divisor = int_number // base
+            remainder = int_number % base
+            if divisor == 0:
+                str_list.append(str(int_number))
+                break
+            str_list.append(str(remainder).rjust(4, '0'))
+            frequency += 1
+            res = pow(base, frequency)
+            if billion:
+                billion = False
+                if str(res) in self.number_dict and res > pow(base, 2):
+                    str_list.append(self.number_dict[str(res)])
+                else:
+                    str_list.append('亿')
+            else:
+                billion = True
+                if str(res) in self.number_dict and res > pow(base, 2):
+                    str_list.append(self.number_dict[str(res)])
+                else:
+                    str_list.append('万')
+
+            int_number = divisor
+        str_list = str_list[::-1]
+        none = False
+        for i, item in enumerate(str_list):
+            if re.search(r'\d', item):
+                c_s = self._thousands_chinese(item)
+                if c_s == '零':
+                    none = True
+                    if len(str_list) == 1:
+                        chinese_number.append(c_s)
+                    continue
+                elif chinese_number and not re.search(r'\d', chinese_number[-1]) and '仟' not in c_s:
+                    chinese_number.append('零')
+                chinese_number.append(c_s)
+                none = False
+            else:
+                if none and item != '亿':
+                    continue
+                chinese_number.append(item)
+        int_chinese = ''.join(chinese_number)
+        float_chinese = self._float_chinese(float_number, cash)
+        return int_chinese + float_chinese
+
+    def _thousands_chinese(self, number: str):
+        chinese_number = ''
+        if number == '0000':
+            return self.number_dict['0']
+        if number == '0':
+            return self.number_dict['0']
+        if len(number) < 4:
+            number = number.rjust(4, '0')
+        if number[0] != '0':
+            chinese_number += self.number_dict[number[0]] + self.number_dict['1000']
+        if number[1] != '0' and number[2] != '0':
+            chinese_number += self.number_dict[number[1]] + self.number_dict['100']
+            chinese_number += self.number_dict[number[2]] + self.number_dict['10']
+        elif number[1] != '0':
+            chinese_number += self.number_dict[number[1]] + self.number_dict['100']
+        elif number[2] != '0' and number[0] != '0':
+            chinese_number += self.number_dict['0']
+            chinese_number += self.number_dict[number[2]] + self.number_dict['10']
+        elif number[2] != '0':
+            chinese_number += self.number_dict[number[2]] + self.number_dict['10']
+        if number[3] != '0' and not number[2] != '0' and (number[0] != '0' or number[1] != '0') and (number[1] == '0' or number[2] == '0'):
+            chinese_number += self.number_dict['0']
+        chinese_number += self.number_dict[number[3]] if number[3] != '0' else ''
+        return chinese_number
+
+    def _float_chinese(self, number: str, cash: bool):
+        division = '点' if not cash else '元'
+        float_chinese = ''
+        if int(number) == 0:
+            if cash:
+                float_chinese += '元整'
+            return float_chinese
+
+        for k, v in enumerate(number):
+            float_chinese += self.number_dict[v]
+            if k == 0 and cash:
+                float_chinese += '角'
+            elif k == 1 and cash:
+                float_chinese += '分'
+                break
+        return division + float_chinese
+
 
 class RealTimeUpdateParas(Paras):
     @staticmethod
@@ -1471,7 +1731,8 @@ class RealTimeUpdateParas(Paras):
             '_uid': None,
             '_start_time': datetime.datetime.now,
             '_parent_pid': None,
-            '_sub_pid': None
+            '_sub_pid': [],
+            '_sub_process': [],
         }
         return locals()
 
@@ -1480,6 +1741,44 @@ class RealTimeUpdate(ParkLY):
     _name = 'realtime'
     _inherit = ['monitor']
     paras = RealTimeUpdateParas()
+
+    def start(self):
+        return self._start()
+
+    @monitor('_process')
+    def add_process(self, func, args, kwargs):
+        sub_p = Process(target=func, args=args, kwargs=kwargs)
+        return {sub_p.pid: sub_p}
+
+    def _start(self):
+        self._start_parent()
+
+    def _start_parent(self):
+        path = os.getcwd()
+        for sub in self._sub_process:
+            sub.start()
+        while True:
+            if (self.start_time.second - datetime.datetime.now().second) % self.flush_time == 0:
+                n = 0
+                if os.stat(path).st_mtime > self.start_process and self._sub_process and n == 0:
+                    for sub in self._sub_process:
+                        sub.kill()
+                    try:
+                        psutil.Process(self._children_process_pid)
+                    except psutil.NoSuchProcess:
+                        print("loading....")
+                        for sub in self._sub_process:
+                            sub.start()
+                            self._sub_pid = sub.pid
+                        self.start_process = time.time()
+                        n += 1
+
+    def _process(self):
+        sub = self._return
+        if sub and isinstance(sub, dict):
+            sub_pid = list(sub.keys())[0]
+            self._sub_pid.append(sub_pid)
+            self._sub_process.append(sub['sub_pid'])
 
 
 env.load()
