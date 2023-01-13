@@ -23,6 +23,7 @@ from types import MethodType, FunctionType
 from collections.abc import Iterable
 from httpx import Response
 from multiprocessing import pool, Process
+from decimal import Decimal
 
 from . import LISTFILE
 
@@ -147,6 +148,7 @@ def get_size(item):
         elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
             size += sum([_get_size(i, seen) for i in obj])
         return size
+
     return formatSize(_get_size(item))
 
 
@@ -276,7 +278,7 @@ class Io:
             env.ios[self._io_key] = io_obj.__class__()
 
     def write(self, msg):
-        self._io.write(msg);
+        self._io.write(msg)
 
     def getvalue(self):
         return self._io.getvalue()
@@ -343,6 +345,7 @@ class Paras:
             'save_encoding': '',
             '_save_encoding': 'utf-8',
             'speed_info': {},
+            'test_info': {},
         }
         # 配置上下文
         context: dict = {}
@@ -606,28 +609,96 @@ def _inherit_parent(inherits, attrs):
 
 
 class reckon_by_time_run(object):
+    _kwargs = ['park_time', 'park_test']
+    run = None
+
     def __init__(self, func):
         self.func = func
+        self.park_kwargs = {}
+        self.args = tuple()
+        self.kwargs = dict()
+        self.obj = None
 
     def __get__(self, obj, klass=None):
+        self.obj = obj
+
         def warp(*args, **kwargs):
-            park_time = kwargs.get('park_time')
-            if 'park_time' in kwargs and park_time:
-                start_time = time.time()
-                kwargs.pop('park_time')
+            kwargs = self._park_kwargs(kwargs)
+            self.args = args
+            self.kwargs = kwargs
             if isinstance(self.func, (monitorV, monitor, command)):
                 self.func = self.func.func
-            func = MethodType(self.func, obj)
-            res = func(*args, **kwargs)
-            if park_time:
-                end_time = time.time()
-                obj.speed_info.update({
-                    func.__name__: {
-                        'time': end_time - start_time + 0.1 - 0.1
-                    }
-                })
-            return res
+            if hasattr(self.func, '__func__'):
+                if not isinstance(self.func, staticmethod):
+                    self.func = MethodType(self.func.__func__, obj)
+                else:
+                    self.func = self.func.__func__
+            else:
+                self.func = MethodType(self.func, obj)
+            return self.park()
+
         return warp
+
+    def park(self):
+        if self.run:
+            if self.run and isinstance(self.run, (tuple, list)):
+                if self.run[0] == 'park_time' and self.run[1]:
+                    return self.park_time()
+                elif self.run[0] == 'park_test':
+                    return self.park_test()
+        return self.func(*self.args, **self.kwargs)
+
+    def park_time(self):
+        start_time = time.time()
+        res = self.func(*self.args, **self.kwargs)
+        end_time = time.time()
+        info = {
+            self.func.__name__: {
+                'start_time': datetime.datetime.now(),
+                'speed_time': Decimal(end_time) - Decimal(start_time)
+            }
+        }
+        self.obj.speed_info.update(info)
+        return res
+
+    def park_test(self):
+        base_time = 100
+        info = {}
+        if isinstance(self.run[1], dict):
+            base_time = self.run[1].get('time', 100)
+        res = None
+        for _ in range(1, base_time + 1):
+            sub_dict = {}
+            start_time = time.time()
+            try:
+                res = self.func(*self.args, **self.kwargs)
+            except Exception as e:
+                sub_dict['error'] = str(e)
+            finally:
+                end_time = time.time()
+                sub_dict['speed_time'] = Decimal(end_time) - Decimal(start_time)
+                sub_dict['result'] = res
+            info[_] = sub_dict
+        self.obj.test_info.update({
+            self.func.__name__: info
+        })
+        return res
+
+    def _park_kwargs(self, kwargs: dict):
+        new_kwargs = {}
+        for key, val in kwargs.items():
+            if key in self._kwargs:
+                self.park_kwargs[key] = val
+            else:
+                new_kwargs[key] = val
+        self.get_run()
+        return new_kwargs
+
+    def get_run(self):
+        if 'park_test' in self.park_kwargs:
+            self.run = ('park_test', self.park_kwargs['park_test'])
+        elif 'park_time' in self.park_kwargs:
+            self.run = ('park_time', self.park_kwargs['park_time'])
 
 
 class Basics(type):
@@ -649,7 +720,9 @@ class Basics(type):
                     attrs['paras'] = Paras()
             for key, val in _attrs:
                 if key not in ['__module__', '__qualname__']:
-                    if callable(val):
+                    if isinstance(val, FunctionType):
+                        attrs[key] = reckon_by_time_run(val)
+                    elif hasattr(val, '__func__'):
                         attrs[key] = reckon_by_time_run(val)
                     if isinstance(val, (monitorV, monitor, command)):
                         mappings_func.add(key)
@@ -1622,12 +1695,12 @@ class Tools(ParkLY):
     def number_to_chinese(self, number, cash=False):
         return self._number_to_chinese(number, cash)
 
+    # 数字转中文主要方法
     def _number_to_chinese(self, number: Union[int, float], cash: bool):
         base = 10000
-        base_number = str(number)
+        base_number = str(Decimal(number))
         str_list = []
         chinese_number = []
-        float_chinese = ''
         int_number = base_number
         float_number = '0'
         if '.' in base_number:
@@ -1636,6 +1709,7 @@ class Tools(ParkLY):
         float_number = float_number
         billion = False
         frequency = 1
+        # 通过除以 base(10000) 将数字转化为四位
         while True:
             divisor = int_number // base
             remainder = int_number % base
@@ -1674,13 +1748,14 @@ class Tools(ParkLY):
                 chinese_number.append(c_s)
                 none = False
             else:
-                if none and item != '亿':
+                if none:
                     continue
                 chinese_number.append(item)
         int_chinese = ''.join(chinese_number)
         float_chinese = self._float_chinese(float_number, cash)
         return int_chinese + float_chinese
 
+    # 将四位数字转化为对应千分位中文读法
     def _thousands_chinese(self, number: str):
         chinese_number = ''
         if number == '0000':
@@ -1701,27 +1776,98 @@ class Tools(ParkLY):
             chinese_number += self.number_dict[number[2]] + self.number_dict['10']
         elif number[2] != '0':
             chinese_number += self.number_dict[number[2]] + self.number_dict['10']
-        if number[3] != '0' and not number[2] != '0' and (number[0] != '0' or number[1] != '0') and (number[1] == '0' or number[2] == '0'):
+        if number[3] != '0' and not number[2] != '0' and (number[0] != '0' or number[1] != '0') and (
+                number[1] == '0' or number[2] == '0'):
             chinese_number += self.number_dict['0']
         chinese_number += self.number_dict[number[3]] if number[3] != '0' else ''
         return chinese_number
 
+    # 小数部分处理
     def _float_chinese(self, number: str, cash: bool):
-        division = '点' if not cash else '元'
         float_chinese = ''
-        if int(number) == 0:
-            if cash:
-                float_chinese += '元整'
-            return float_chinese
-
-        for k, v in enumerate(number):
-            float_chinese += self.number_dict[v]
-            if k == 0 and cash:
-                float_chinese += '角'
-            elif k == 1 and cash:
-                float_chinese += '分'
-                break
+        division = ''
+        if number:
+            division = '点' if not cash else '元'
+            if int(number) == 0:
+                if cash:
+                    float_chinese += '元整'
+                return float_chinese
+            number = number.rstrip('0')
+            for k, v in enumerate(number):
+                float_chinese += self.number_dict[v]
+                if k == 0 and cash:
+                    float_chinese += '角'
+                elif k == 1 and cash:
+                    float_chinese += '分'
+                    break
         return division + float_chinese
+
+    @staticmethod
+    def number_to_chinese_2(amount):
+        c_dict = {1: u'', 2: u'拾', 3: u'佰', 4: u'仟'}
+        x_dict = {1: u'元', 2: u'万', 3: u'亿', 4: u'兆'}
+        g_dict = {0: u'零', 1: u'壹', 2: u'贰', 3: u'叁', 4: u'肆', 5: u'伍', 6: u'陆', 7: '柒', 8: '捌', 9: '玖'}
+
+        def number_split(number):
+            g = len(number) % 4
+            number_list = []
+            lx = len(number) - 1
+            if g > 0:
+                number_list.append(number[0:g])
+            k = g
+            while k <= lx:
+                number_list.append(number[k:k + 4])
+                k += 4
+            return number_list
+
+        def number_to_capital(number):
+            len_number = len(number)
+            j = len_number
+            big_num = ''
+            for i in range(len_number):
+                if number[i] == '-':
+                    big_num += '负'
+                elif int(number[i]) == 0:
+                    if i < len_number - 1:
+                        if int(number[i + 1]) != 0:
+                            big_num += g_dict[int(number[i])]
+                else:
+                    big_num += g_dict[int(number[i])] + c_dict[j]
+                j -= 1
+            return big_num
+
+        number = str(amount).split('.')
+        integer_part = number[0]
+        chinese = ''
+        integer_part_list = number_split(integer_part)
+        integer_len = len(integer_part_list)
+        for i in range(integer_len):
+            if number_to_capital(integer_part_list[i]) == '':
+                chinese += number_to_capital(integer_part_list[i])
+            else:
+                chinese += number_to_capital(integer_part_list[i]) + x_dict[integer_len - i]
+        if chinese and '元' not in chinese:
+            chinese += '元'
+        if chinese and len(number) == 1:
+            chinese += '整'
+        else:
+            fractional_part = number[1]
+            fractional_len = len(fractional_part)
+            if fractional_len == 1:
+                if int(fractional_part[0]) == 0:
+                    chinese += '整'
+                else:
+                    chinese += g_dict[int(fractional_part[0])] + '角整'
+            else:
+                if int(fractional_part[0]) == 0 and int(fractional_part[1]) != 0:
+                    chinese += '零' + g_dict[int(fractional_part[1])] + '分'
+                elif int(fractional_part[0]) == 0 and int(fractional_part[1]) == 0:
+                    chinese += '整'
+                elif int(fractional_part[0]) != 0 and int(fractional_part[1]) != 0:
+                    chinese += g_dict[int(fractional_part[0])] + '角' + g_dict[int(fractional_part[1])] + '分'
+                else:
+                    chinese += g_dict[int(fractional_part[0])] + '角整'
+        return chinese
 
 
 class RealTimeUpdateParas(Paras):

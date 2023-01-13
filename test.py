@@ -40,20 +40,18 @@ class P(ParkLY):
         print(1)
 
 
-
 if __name__ == '__main__':
     env.load()
     p = env['tools']
-    # p.number_dict.update({
-    #     str(pow(10000, 5)): '兆'
-    # })
+    p.number_dict.update({
+        str(pow(10000, 4)): '兆'
+    })
     import time
-    start_time = time.time()
-    print(p.number_to_chinese('12340', cash=False, park_time=True))
-    print(p.exists_rename('dasdas', park_time=True))
-    end_time = time.time()
-    print(end_time - start_time + 0.001 - 0.001)
+    print(p.number_to_chinese(1.78e+5, cash=True, park_time=True))
+    # print(p.exists_rename('dasdas', park_time=True))
+    print(p.number_to_chinese_2(1.78e+5, park_time=True))
     print(p.speed_info)
+    # print(p.test_info)
     # p._attrs()
     # print(get_size(p))0
     # test.test()
