@@ -2,7 +2,10 @@ import time
 import httpx
 import asyncio
 import requests
-from parkPro.tools import ParkLY, monitor, Paras, monitorV
+from parkPro.utils.base import ParkLY
+from parkPro.utils.paras import Paras
+from parkPro.utils.api import monitorV
+from parkPro.utils.env import env
 
 
 def get_page_ajax_url(page):
@@ -40,17 +43,17 @@ class Request(ParkLY):
     _inherit = 'tools'
 
     def start(self):
-        for i in range(1, 10):
+        for i in range(1, 2):
             self.url = get_page_ajax_url(i)
 
-    @monitorV('url', async_exec=True)
-    async def request(self):
-        async with httpx.AsyncClient() as client:
-            response = await client.get(self.url, headers=self.headers)
-            if response.status_code == 200:
-                self.html = response.text
-            else:
-                self.error_url.append(self.url)
+    @monitorV('url')
+    def request1(self):
+        response = requests.get(self.url, headers=self.headers)
+        self.html = response.text
+        # if response.status_code == 200:
+        #
+        # else:
+        #     self.error_url.append(self.url)
 
     @monitorV('html')
     def parsel_html(self):
@@ -58,4 +61,6 @@ class Request(ParkLY):
 
 
 if __name__ == '__main__':
-    pass
+    env.load()
+    p = env['tools']
+    p.start()

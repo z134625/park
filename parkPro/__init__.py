@@ -1,4 +1,2 @@
-LISTFILE = 0
-LISTDIR = 1
-LISTALL = 2
+from . import expand
 

@@ -1,0 +1,1 @@
+from .IntellectParas import IntellectParas

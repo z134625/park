@@ -1,4 +1,5 @@
-from parkPro.tools import ParkLY, env, SettingParas, remove
+from parkPro.utils.base import ParkLY, env
+from parkPro.utils.paras import SettingParas
 import inherit
 
 
@@ -49,7 +50,7 @@ class New4(New):
         super(New4, self).pas()
 
 class New3(ParkLY):
-    _name = 'New3'
+    # _name = 'New3'
     _inherit = 'New'
     root_func = ['names']
     paras = SettingParas()
@@ -74,45 +75,44 @@ class New3(ParkLY):
 
         # self.env['New'].pas()
 
+    def ps(self):
+        s = self.env['inherit'].sudo()
+        s.park()
+
+        self.root_func = []
+        print(self.root_func)
+        print(self.paras)
+        print(self)
+        self.names()
+        self.open(r'.\conf.txt', park_time=True)
+        print(self._a)
+        print(self)
+        # self.paras._set_list = ['1']
+        print(self.paras._attrs)
+        print(self.a)
+        print(self.paras.update({
+            '_attrs': {'a': 10}
+        }))
+        print(self.paras._attrs)
+        print(self.a)
+        print(self.paras._obj)
+        print(self.a)
+        # s = self.env['tools'].config(data='das阿斯顿', mode=2, timeout=None)
+        # t = s.sudo()
+        # print(t.result)
+        # print(s.result)
+
 
 if __name__ == "__main__":
     env.load()
     # New3(_error=True, _warn=False, _cover=True)
     # New.pas = New4.pas
-    # New()
     new = env['New']
-    new.pas(park_time=True)
-    print(new.speed_info)
+    # new.pas(park_time=True)
+    # print(new.speed_info)
 
-    # @new(root=True)
-    # def ps(self):
-    #     s = self.env['inherit'].sudo()
-    #     s.park()
-    #
-    #     self.root_func = []
-    #     print(self.root_func)
-    #     print(self.paras)
-    #     print(self)
-    #     self.names()
-    #     self.open(r'.\conf.txt')
-    #     print(self._a)
-    #     print(self)
-    #     # self.paras._set_list = ['1']
-    #     print(self.paras._attrs)
-    #     print(self.a)
-    #     print(self.paras.update({
-    #         '_attrs': {'a': 10}
-    #     }))
-    #     print(self.paras._attrs)
-    #     print(self.a)
-    #     print(self.paras._obj)
-    #     print(self.a)
-        # s = self.env['tools'].config(data='das阿斯顿', mode=2, timeout=None)
-        # t = s.sudo()
-        # print(t.result)
-        # print(s.result)
     # print(new.with_paras(ds=True).paras.ds)
-    # ps()
+    new.ps()
     # print(ne)
     # new.with_paras(gl=True, _warn=True, _cover=True)
     # new.paras.update({

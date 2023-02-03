@@ -1,3 +1,3 @@
-a = 1
-c = bool
-_default = c
+OPENAI_API_KEY = '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'
+TEMPERATURE = 0.9
+MAX_TOKENS = 4000

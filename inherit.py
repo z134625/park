@@ -1,4 +1,5 @@
-from parkPro.tools import ParkLY, Paras
+from parkPro.utils.base import ParkLY
+from parkPro.utils.paras import Paras
 
 
 class Inherit(ParkLY):
