@@ -21,10 +21,10 @@ class Setting(ParkLY):
     _name = 'setting'
     paras = SettingParas()
 
-    def open(self,
-             path: str,
-             **kwargs: dict
-             ) -> object:
+    def _load_setting(self,
+                      path: str,
+                      **kwargs: dict
+                      ) -> object:
         """
         加载配置文件, 支持ini、json、py、txt
         :param path: 需要加载配置文件的路径
@@ -36,17 +36,17 @@ class Setting(ParkLY):
             _, suffix = os.path.splitext(path)
             suffix: str = suffix.lower()
             if suffix == '.py':
-                with open(path, 'r', encoding=kwargs.get("encoding", None)) as f:
-                    file = f.read()
-                    d = readPy(file)
-                    d.pop('file')
-                    # self.paras._set_dict = {**self.paras._set_dict, **d}
-                    set_list += list(d.items())
+                file = self.open(path, encoding=kwargs.get("encoding", None))
+                d = readPy(file)
+                d.pop('file')
+                set_list += list(d.items())
             elif suffix == '.json':
-                with open(path, 'r', encoding=kwargs.get("encoding", None)) as f:
-                    # self.paras._set_dict = {**self.paras._set_dict, **json.load(f)}
-                    set_list += list(json.load(f).items())
-                    f.close()
+                f = self.open(path,
+                              mode='r',
+                              encoding=kwargs.get("encoding", None),
+                              get_file=True
+                              )
+                set_list += list(json.load(f).items())
             elif suffix in self.paras._suffix_ini:
                 config = configparser.ConfigParser()
                 config.read(path, encoding='utf-8')
@@ -58,8 +58,9 @@ class Setting(ParkLY):
                 set_list += list(d.items())
             elif suffix == '.txt':
                 d = {}
-                with open(path, 'r', encoding=kwargs.get("encoding", None)) as f:
-                    lines = f.readlines()
+                lines = self.open(file=path,
+                                  encoding=kwargs.get("encoding", None),
+                                  readline=True)
                 for line in lines:
                     try:
                         key, value = line.split("=")

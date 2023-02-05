@@ -2,7 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/chatgpt/openai-quickstart-python" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/新建文件夹/park" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/新建文件夹/test/srez" vcs="Git" />
   </component>

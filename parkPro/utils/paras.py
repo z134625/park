@@ -70,10 +70,8 @@ class Paras:
         # 设置成功的属性和值
         _attrs: dict = {
             'is_save_log': True,
-            'save_path': './Park',
-            '_save_path': './Park',
-            'save_file': '',
-            '_save_file': 'Park',
+            'save_path': '',
+            '_save_path': '',
             'save_suffix': {},
             '_save_suffix': {
                 'file': '',
@@ -221,7 +219,6 @@ class Paras:
             obj._save_path = obj.save_path if obj.save_path else obj._save_path
             obj._save_encoding = obj.save_encoding if obj.save_encoding else obj._save_encoding
             obj._save_mode = obj.save_mode if obj.save_mode else obj._save_mode
-            obj._save_file = obj.save_file if obj.save_file else obj._save_file
             return obj
         return None
 

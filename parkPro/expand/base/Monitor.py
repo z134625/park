@@ -34,12 +34,12 @@ class Monitor(ParkLY):
             order = res.monitor_flag['order']
             if callable(args):
                 args = args(self)
-                if isinstance(args, (tuple, list)):
-                    args = (args, {})
-                elif isinstance(args, dict):
-                    args = ((), args)
-                else:
-                    args = ((args,), {})
+            if isinstance(args, (tuple, list)):
+                args = (args, {})
+            elif isinstance(args, dict):
+                args = ((), args)
+            else:
+                args = ((args,), {})
             if res.monitor_flag['type']:
                 return self._monitoring(func=res, fields=fields,
                                         arg=args, order=order)
@@ -84,7 +84,7 @@ class Monitor(ParkLY):
                 monit_func = getattr(self, f)
                 self.context.funcName = func.__name__
                 monit_func(*arg[0], **arg[1])
-        self.context.update({'return_result': res})
+        self.context.update({'return_result': False})
 
     def _monitoringV(self,
                      func: Union[FunctionType, MethodType, WrapperDescriptorType, MethodWrapperType],

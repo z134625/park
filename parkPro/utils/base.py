@@ -4,12 +4,13 @@ import os
 import pickle
 import re
 import sys
+from collections.abc import Iterable
 from typing import (
     List,
     Union,
     Any,
     Set,
-    Tuple
+    Tuple, TextIO
 )
 from types import (
     FunctionType,
@@ -22,13 +23,13 @@ from .paras import Paras
 from ..tools import (
     mkdir,
     warning,
-    _Context
+    _Context,
+    listPath
 )
 from .env import env
 
 
 class ParkLY(object, metaclass=Basics):
-
     """
     为工具类中的基类，
     该类定义一些基础方法供使用
@@ -182,19 +183,95 @@ class ParkLY(object, metaclass=Basics):
             return res
         return super(ParkLY, self).__setattr__(key, value)
 
-    def save_log(self) -> None:
-        for key in self._save_io:
+    def _get_type_func(self,
+                       ty: str,
+                       key: str,
+                       args: Union[Tuple[Any], None] = None
+                       ) -> None:
+        if ty:
+            name = f'_{ty}_{key}'
+            if hasattr(self, name):
+                if callable(args):
+                    args = args(self)
+                if isinstance(args, (tuple, list)):
+                    args = (args, {})
+                elif isinstance(args, dict):
+                    args = ((), args)
+                else:
+                    args = ((args,), {})
+                res = eval(f'self.{name}(*args, **kwargs)',
+                           {'self': self, 'args': args[0] or (), 'kwargs': args[1] or {}}
+                           )
+                return res
+
+    def open(self,
+             file: str,
+             mode: str = 'r',
+             encoding: Union[None, str] = 'utf-8',
+             lines: bool = False,
+             datas: Any = None,
+             get_file: bool = False
+             ) -> TextIO | None | Any:
+        method = None
+        write = False
+        if mode in ['r', 'rb']:
+            method = 'readlines' if lines else 'read'
+        elif mode in ['w', 'wb']:
+            write = True
+            method = 'writelines' if lines else 'write'
+        elif mode in ['ab', 'a']:
+            if not datas:
+                method = 'readlines' if lines else 'read'
+            else:
+                write = True
+                method = 'writelines' if lines else 'write'
+        if method:
+            res = None
+            f = open(file, mode, encoding=encoding)
+            if get_file:
+                return f
+            try:
+                func = eval(f'f.{method}', {'f': f})
+                res = func() if not write else func(datas)
+            except Exception as e:
+                self.env.log.error(e)
+            finally:
+                f.close()
+            return res
+
+    def save(self,
+             key: Union[str, None] = None,
+             args: Union[Tuple[Any], None] = None
+             ) -> None:
+        if key:
+            return self._get_type_func(ty='save', key=key, args=args)
+
+    def _save_log(self, name) -> None:
+        self._save_file(key='log', name=name)
+
+    def _save_file(self,
+                   key=None,
+                   name: str = 'park'
+                   ) -> None:
+        keys = self._save_io
+        if key:
+            keys = [key]
+        for key in keys:
             value = self.io[key].getvalue()
             save_path = os.path.join(self._save_path, key)
             mkdir(save_path)
-            file = os.path.join(save_path, self._save_file +
+            file = os.path.join(save_path, name +
                                 (f'.{self._save_suffix.get(key)}' if self._save_suffix.get(
                                     key) else self._save_suffix.get(key, '')))
+            file = self.exists_rename(file)
             mode = self._save_mode
             if isinstance(value, bytes):
                 mode = self._save_mode + 'b'
-            with open(file, mode, encoding=self._save_encoding if 'b' not in mode else None) as f:
-                f.write(value)
+            self.open(file,
+                      mode=mode,
+                      encoding=self._save_encoding if 'b' not in mode else None,
+                      datas=value
+                      )
 
     def sudo(self,
              gl: bool = False
@@ -277,10 +354,10 @@ class ParkLY(object, metaclass=Basics):
         """
         return self.paras.flags
 
-    def save(self,
-             file: Union[str, io.FileIO, io.BytesIO] = None,
-             data: Any = None
-             ) -> Union[str, io.FileIO, io.BytesIO]:
+    def _save_pickle(self,
+                     file: Union[str, io.FileIO, io.BytesIO] = None,
+                     data: Any = None
+                     ) -> Union[str, io.FileIO, io.BytesIO]:
         """
         :param file: 保持序列化数据位置， 不提供则不保存，
         :param data: 需要序列化的数据， 不提供则序列化加载的配置文件内容
@@ -303,14 +380,11 @@ class ParkLY(object, metaclass=Basics):
         return file
 
     def load(self,
-             ty: Union[int, None] = None,
-             args: Union[Tuple[Tuple[Any], dict], None] = None
+             key: Union[str, None] = None,
+             args: Union[Tuple[Tuple[Any], dict], dict, List, Tuple, None] = None
              ):
-        if ty:
-            name = f'_load_{ty}'
-            if hasattr(self, name):
-                res = eval(f'self.{name}(*args)', {'self': self, 'args': args})
-                return res
+        if key:
+            return self._get_type_func(ty='load', key=key, args=args)
 
     def _load_decorator(self,
                         func: Union[MethodType, FunctionType]
@@ -373,3 +447,70 @@ class ParkLY(object, metaclass=Basics):
                     setattr(obj, key, value)
             obj.paras._attrs.update(content)
             return self
+
+    def exists_rename(self,
+                      path: str,
+                      paths: List[str] = None,
+                      clear: bool = False,
+                      dif: bool = False) -> str:
+        if not clear:
+            if os.path.isdir(path):
+                if path.endswith('/'):
+                    path = path[:-1]
+                names = listPath(path=os.path.dirname(path), splicing=False, list=True)
+                return os.path.join(os.path.dirname(path), self.generate_name(name=os.path.basename(path),
+                                                                              names=names, dif=dif))
+            if os.path.isfile(path):
+                names = listPath(path=os.path.dirname(path), splicing=False, list=True)
+                return os.path.join(os.path.dirname(path), self.generate_name(name=os.path.basename(path),
+                                                                              names=names, mode=1, dif=dif))
+            else:
+                names = []
+                if paths:
+                    names = paths
+                return self.generate_name(name=path, names=names, dif=dif)
+        else:
+            name, suffix = os.path.splitext(path)
+            pattern = re.compile(r'(.*) \([0-9]+\)')
+            res = re.search(pattern=pattern, string=name)
+            if res:
+                name_head = res.group(1)
+                return name_head + suffix
+            else:
+                return path
+
+    def generate_name(self,
+                      name: str,
+                      names: Iterable,
+                      mode: int = 0,
+                      dif: bool = False,
+                      suffix: bool = '',
+                      ) -> str:
+        if mode == 1:
+            name, suffix = os.path.splitext(name)
+            names = list(
+                map(lambda x: os.path.splitext(x)[0], filter(lambda x: os.path.splitext(x)[1] == suffix, names)))
+        if name in names:
+            start = ' (1)'
+            pattern_number = re.compile(r'.* \((\d+)\)')
+            pattern_letter = re.compile(r'.* \(([A-Z]+)\)')
+            pattern = pattern_number
+            if dif:
+                start = ' (A)'
+                pattern = pattern_letter
+            number = re.match(pattern=pattern, string=name)
+            if number:
+                number = number.group(1)
+                if not dif:
+                    new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
+                else:
+                    if not number.endswith('Z'):
+                        new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number[:-1] + chr(ord(number[-1]) + 1)), name)
+                    else:
+                        new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number + 'A'), name)
+            else:
+                new_name = name + start
+            if new_name in names:
+                return self.generate_name(new_name, names, mode=0, dif=dif, suffix=suffix)
+            return new_name + suffix
+        return name + suffix

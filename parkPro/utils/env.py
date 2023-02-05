@@ -30,7 +30,8 @@ class RegisterEnv:
         self.log = logging
 
     def init_log_config(self,
-                        level: int
+                        level: int,
+                        show: bool,
                         ) -> logging.Logger:
         if not level:
             level = logging.DEBUG
@@ -47,7 +48,8 @@ class RegisterEnv:
                                       datefmt="%Y-%m-%d %H:%M:%S")
         ch.setFormatter(formatter)
         fh.setFormatter(formatter)
-        logger.addHandler(fh)
+        if show:
+            logger.addHandler(fh)
         logger.addHandler(ch)
         return logger
 
@@ -117,7 +119,8 @@ class RegisterEnv:
         raise KeyError('没有注册该配置(%s)' % item)
 
     def load(self,
-             level: Union[None, int] = None
+             level: Union[None, int] = None,
+             show: bool = True
              ) -> None:
         mapping = {}
         for key in self._mapping:
@@ -125,7 +128,7 @@ class RegisterEnv:
                 mapping.update({
                     key: self._mapping[key]()
                 })
-        self.log = self.init_log_config(level)
+        self.log = self.init_log_config(level, show)
 
     def clear(self) -> None:
         return self._mapping.clear()

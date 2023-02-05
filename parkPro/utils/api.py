@@ -23,6 +23,7 @@ MONITOR_ORDER_BEFORE = 1
 
 def command(
         keyword: Union[str, Tuple[str], List[str]],
+        name: str,
         unique: bool = False,
         priority: int = -1
 ) -> Callable[[Any], Any]:
@@ -30,6 +31,7 @@ def command(
             func: Union[MethodType, FunctionType]
     ) -> Union[Any]:
         setattr(func, 'command_flag', {
+            'name': name,
             'keyword': keyword,
             'unique': unique,
             'priority': priority,
@@ -48,7 +50,7 @@ def monitor(
     def warp(func):
         setattr(func, 'monitor_flag', {
             'fields': fields,
-            'args': args or ((), {}),
+            'args': args or (),
             'type': ty,
             'order': order,
         })
@@ -113,7 +115,7 @@ class _Reckon_by_time_run(object):
 
     def _park(self) -> Union[Any]:
         func = self.func
-        func = self.obj.load(ty='decorator', args=(func,))
+        func = self.obj.load(key='decorator', args=(func,))
         if self.run:
             if self.run and isinstance(self.run, (tuple, list)):
                 if self.run[0] == 'park_time' and self.run[1]:

@@ -7,8 +7,10 @@ from .paras import IntellectParas
 
 def m(**kwargs):
     bar = kwargs.get('bar')
+
     def p(i):
         time.sleep(0.01)
+
     bar(p, [i for i in range(1200)])
     return 1
 
@@ -18,8 +20,27 @@ class IntellectBase(base.ParkLY):
     _inherit = 'tools'
     paras = IntellectParas()
 
-    def check_init(self) -> None:
-        self.context.is_init = True
+    def init(self,
+             **kwargs
+             ) -> None:
+        super().init(**kwargs)
+        self.init_base(self.init_setting())
+
+    def check_init(self) -> bool:
+        return bool(self.context.is_init)
+
+    def init_setting(self,
+                     ) -> None:
+        pass
+
+    def init_base(self,
+                  path: str = None
+                  ) -> None:
+        if path is None:
+            path = self.context.setting_path
+        if not self.check_init():
+            self.env['setting'].load('setting', args=(path, )).give(self)
+            self.context.is_init = True
 
     @api.monitor(fields='ab',
                  args=lambda x: {'y': x.a, 'x': x.b},
@@ -35,4 +56,4 @@ class IntellectBase(base.ParkLY):
 
     @functools.lru_cache()
     def ab(self, x, y):
-       print(x - y)
+        print(x - y)

@@ -96,7 +96,8 @@ class _ParkProgress(object):
 
     def epochs(self,
                func: Union[FunctionType, MethodType],
-               args = None,
+               name: str = None,
+               args: Any = None,
                error: Union[str, None] = None,
                success: Union[str, None] = None,
                bar: bool = False
@@ -125,7 +126,7 @@ class _ParkProgress(object):
         if callable(msg):
             msg = msg(res[1])
         self.epoch(msg=msg or
-                       f"该程序({func.__name__ if hasattr(func, '__name__') else str(func)})执行{r}",
+                       f"该程序({name or (func.__name__ if hasattr(func, '__name__') else str(func))})执行{r}",
                    typ=res[0])
         return res
 
@@ -167,6 +168,7 @@ class Command(ParkLY):
     def _command(self,
                  func: Union[FunctionType, MethodType],
                  keyword: Union[str, List[str], Tuple[str]],
+                 name: str,
                  unique: bool = False,
                  priority: int = -1
                  ) -> Callable[[Tuple[Any], Dict[str, Any]], Any]:
@@ -181,6 +183,7 @@ class Command(ParkLY):
                 'func': func.__name__,
                 'unique': unique,
                 'priority': priority,
+                'name': name,
             }
         elif isinstance(keyword, (tuple, list)):
             keyword = sorted(keyword)
@@ -192,7 +195,8 @@ class Command(ParkLY):
                 'help': func.__doc__ or '没有使用帮助',
                 'func': func.__name__,
                 'unique': unique,
-                'priority': priority
+                'priority': priority,
+                'name': name
             }
 
         def command_warps(
@@ -215,7 +219,8 @@ class Command(ParkLY):
         )
 
     @api.command(
-        keyword=['--help']
+        keyword=['--help'],
+        name='help'
     )
     def help(self,
              order: str = None
@@ -248,11 +253,13 @@ class Command(ParkLY):
                         'args': res.group(2),
                         'priority': info['priority'],
                         'unique': info['unique'],
+                        'name': info['name'],
                     }
                 })
+                self.context.command_k_true.append(S)
 
     def main(self,
-             com: Union[List[str], Tuple[str], None] = None,
+             _commands: Union[List[str], Tuple[str], None] = None,
              delay: Union[int, None] = None,
              epoch_show: bool = True
              ) -> None:
@@ -260,8 +267,8 @@ class Command(ParkLY):
         命令行启动主程序
         """
         commands = sys.argv[1:]
-        if com:
-            commands = com + commands
+        if _commands:
+            commands = _commands + commands
         error = []
         command_keyword = self.context.command_keyword
         list(map(lambda s: self._re_commands(s), commands))
@@ -269,7 +276,9 @@ class Command(ParkLY):
         for c in cs:
             index = commands.index(c) + 1
             args = None
-            if index < len(commands) and commands[index] not in command_keyword:
+            if index < len(commands) and \
+                    commands[index] not in command_keyword and\
+                    commands[index] not in self.context.command_k_true:
                 args = commands[index]
             info = self.context.command_info[command_keyword[c]]
             self.context.command_k_2_args.update({
@@ -278,6 +287,7 @@ class Command(ParkLY):
                     'args': args,
                     'priority': info['priority'],
                     'unique': info['unique'],
+                    'name': info['name'],
                 }
             })
         commands = list(self.context.command_k_2_args.items())
@@ -298,7 +308,7 @@ class Command(ParkLY):
                     raise IOError("当前指令(%s)只允许执行一次" % keys)
                 func = info['func']
                 func = eval(f'self.{func}')
-                res = pg.epochs(func=func, args=args)
+                res = pg.epochs(func=func, name=info['name'], args=args)
                 if not res[0]:
                     error.append(res[1])
                 if delay:
@@ -307,3 +317,11 @@ class Command(ParkLY):
                 return pg.success()
             else:
                 return pg.error(msg='\n'.join(error))
+        self.main_clear()
+
+    def main_clear(self) -> None:
+        """
+        用于清除本次main程序启动时增加的缓存变量
+        """
+        self.command_k_2_args.clear()
+        self.command_k_true.clear()
