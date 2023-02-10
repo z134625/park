@@ -5,7 +5,8 @@ from typing import Union, Any
 
 from ...utils import (
     base,
-    api
+    api,
+    
 )
 
 
@@ -15,7 +16,7 @@ class OpenAi(base.ParkLY):
 
     def init_api(self,
                  ) -> Any:
-        openai.api_key = self.OPENAI_API_KEY
+        openai.api_key = self.setting.OPENAI_API_KEY
         return self
 
     def _request_openai(self,
@@ -28,15 +29,18 @@ class OpenAi(base.ParkLY):
         paras = {
             'logprobs': 10,
             'top_p': 0,
-            'model': 'text-davinci-003',
+            'model': 'text-davinci-002',
             'prompt': f"<|endoftext|>{msg}\n--\nLabel:",
-            'temperature': float(self.TEMPERATURE) or 0.9,
+            'temperature': float(self.setting.TEMPERATURE) or 0.5,
+            'stop': None,
+            'n': 1
         }
-        if self.MAX_TOKENS:
+        if self.setting.MAX_TOKENS:
             paras.update({
-                'max_tokens': int(self.MAX_TOKENS)
+                'max_tokens': int(self.setting.MAX_TOKENS)
             })
         # if isinstance(msg, str):
+
         response = openai.Completion.create(**paras)
         # else:
         #     tasks = [openai.Completion.acreate(**{**paras,

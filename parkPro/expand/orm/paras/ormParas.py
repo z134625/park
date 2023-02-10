@@ -7,6 +7,8 @@ class ormParas(paras.Paras):
     def init() -> dict:
         _attrs = {
             'create_db': True,
+            'cr': None,
+            '_table': None
         }
         context = _Context({
             'host': '',
@@ -14,6 +16,5 @@ class ormParas(paras.Paras):
             'user': '',
             'password': '',
             'dbname': False,
-            'cr': ''
         })
         return locals()

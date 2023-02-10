@@ -1,130 +1,37 @@
-from parkPro.utils.base import ParkLY, env
-from parkPro.utils.paras import SettingParas
-import inherit
+from parkPro.utils.base import ParkLY
+from parkPro.utils.env import env
 
 
-class New(ParkLY):
-    _name = 'New'
-    root_func = ['name']
+class Fields:
 
-    def name(self):
-        # print(sys._getframe().f_code.co_filename)  # 当前文件名，可以通过__file__获得
-        # print(sys._getframe(0).f_code.co_name)  # 当前函数名
-        # print(sys._getframe(1).f_code.co_name)  # 调用该函数的函数名字，如果没有被调用，则返回<module>
-        # print(sys._getframe(0).f_lineno)  # 当前函数的行号
-        # print(sys._getframe(1).f_lineno)  # 调用该函数的行号
-        print(
-            ())
+    def __init__(self, **kwargs):
+        self.init(**kwargs)
 
-    def pas(self):
-        print(3)
-        self.name()
+    def init(self, **kwargs):
+        pass
+
+    def __get__(self, obj, cls=None):
+        return self
 
 
-class New2(ParkLY):
-    _inherit = 'New'
-    root_func = ['name']
+class A(ParkLY):
+    _name = 'A.park'
+    c = Fields()
 
-    def pas(self):
-        # print(sys._getframe().f_code.co_filename)  # 当前文件名，可以通过__file__获得
-        # print(sys._getframe(0).f_code.co_name)  # 当前函数名
-        # print(sys._getframe(1).f_code.co_name)  # 调用该函数的函数名字，如果没有被调用，则返回<module>
-        # print(sys._getframe(0).f_lineno)  # 当前函数的行号
-        # print(sys._getframe(1).f_lineno)  # 调用该函数的行号
-        print(2)
-        super(New2, self).pas()
-
-
-class New4(New):
-    _inherit = 'New'
-    root_func = ['name']
-    parass = 123
-
-    def pas(self):
-        # print(sys._getframe().f_code.co_filename)  # 当前文件名，可以通过__file__获得
-        # print(sys._getframe(0).f_code.co_name)  # 当前函数名
-        # print(sys._getframe(1).f_code.co_name)  # 调用该函数的函数名字，如果没有被调用，则返回<module>
-        # print(sys._getframe(0).f_lineno)  # 当前函数的行号
-        # print(sys._getframe(1).f_lineno)  # 调用该函数的行号
-        print(1)
-        super(New4, self).pas()
-
-class New3(ParkLY):
-    # _name = 'New3'
-    _inherit = 'New'
-    root_func = ['names']
-    paras = SettingParas()
-    monitor = ['names']
-
-    def names(self):
-        # print(sys._getframe().f_code.co_filename)  # 当前文件名，可以通过__file__获得
-        # print(sys._getframe(0).f_code.co_name)  # 当前函数名
-        # print(sys._getframe(1).f_code.co_name)  # 调用该函数的函数名字，如果没有被调用，则返回<module>
-        # print(sys._getframe(0).f_lineno)  # 当前函数的行号
-        # print(sys._getframe(1).f_lineno)  # 调用该函数的行号
-        # print(dir(self.env['New']))
-        # print(self.env['New'].__class__.__bases__[0])
-        print(self.paras)
-        self.env['New'].pas()
-        a = self.env['setting']
-        a.open(r'.\conf.txt')
-        print(a.sudo()._a)
-        a.give(self)
-        a.give(self, content={'open': a.open})
-        print(a)
-
-        # self.env['New'].pas()
-
-    def ps(self):
-        s = self.env['inherit'].sudo()
-        s.park()
-
-        self.root_func = []
-        print(self.root_func)
-        print(self.paras)
-        print(self)
-        self.names()
-        self.open(r'.\conf.txt', park_time=True)
-        print(self._a)
-        print(self)
-        # self.paras._set_list = ['1']
-        print(self.paras._attrs)
-        print(self.a)
-        print(self.paras.update({
-            '_attrs': {'a': 10}
-        }))
-        print(self.paras._attrs)
-        print(self.a)
-        print(self.paras._obj)
-        print(self.a)
-        # s = self.env['tools'].config(data='das阿斯顿', mode=2, timeout=None)
-        # t = s.sudo()
-        # print(t.result)
-        # print(s.result)
+    def init(self, ** kwargs):
+        super().init()
+        __mapping__ = {}
+        for k in self.__new_attrs__:
+            if hasattr(self, k):
+                v = eval(f'self.{k}')
+                if isinstance(v, Fields):
+                    __mapping__[k] = v
+        setattr(self, '__mapping__', __mapping__)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     env.load()
-    # New3(_error=True, _warn=False, _cover=True)
-    # New.pas = New4.pas
-    new = env['New']
-    # new.pas(park_time=True)
-    # print(new.speed_info)
-
-    # print(new.with_paras(ds=True).paras.ds)
-    new.ps()
-    # print(ne)
-    # new.with_paras(gl=True, _warn=True, _cover=True)
-    # new.paras.update({
-    #     'root_func': [],
-    #     '_attrs': {'a': 1}
-    # })
-    # new.paras.update({
-    #     '_attrs': {'a': 2}
-    # })
-    # print(new.a)
-
-    # obj = env['monitor']
-    # print(obj)
-    # obj.attr()
-
+    k = env['A.park']
+    # k.init()
+    print(k.__new_attrs__)
+    print(k.__mapping__)

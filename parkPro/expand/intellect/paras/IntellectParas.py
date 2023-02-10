@@ -7,6 +7,8 @@ class IntellectParas(paras.Paras):
     def init() -> dict:
         context = _Context({
             'is_init': False,
-            'setting_path': ''
+            'setting_path': '',
+            'reload_init': []
         })
+        setting = _Context({})
         return locals()

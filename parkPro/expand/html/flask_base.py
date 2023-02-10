@@ -1,12 +1,12 @@
-
 import os
+import uuid
 
 from flask import (
     Flask,
     request,
-    redirect,
     render_template,
-    url_for
+    url_for,
+    make_response
 )
 from types import (
     FunctionType,
@@ -14,6 +14,7 @@ from types import (
     LambdaType
 )
 from typing import Union, Any
+from flask_cors import CORS
 
 from ...utils import (
     base,
@@ -39,15 +40,12 @@ class FlaskBase(base.ParkLY):
             self.env['setting'].load('setting', args=(path or self.setting_path, )).give(self)
             self.context.update({
                 'app': Flask(__name__),
-                'request': request,
                 'is_init': True,
-                'redirect': redirect,
-                'render_template': render_template,
                 'old_html': '',
-                'url_for': url_for,
             })
             self.port()
             self.host()
+            CORS(self.context.app, resources=r'/*')
 
     @api.monitor(fields='init_setting',
                  args=lambda x: x.setting_path,
@@ -64,16 +62,16 @@ class FlaskBase(base.ParkLY):
         return func
 
     def _log_route(self, func):
-        def warp(*args, **kwargs):
-            url = self.context.request.url
-            try:
-                res = func(*args, **kwargs)
-                self.env.log.debug(f'[{url}] {self.context.request.method} : 成功')
-                return res
-            except Exception as e:
-                self.env.log.error(f'[{url}] {self.context.request.method} : {str(e)}')
-                raise e
-        return warp
+        # def warp(*args, **kwargs):
+        #     url = request.url
+        #     try:
+        #         res = func(*args, **kwargs)
+        #         self.env.log.debug(f'[{url}] {request.method} : 成功')
+        #         return res
+        #     except Exception as e:
+        #         self.env.log.error(f'[{url}] {request.method} : {str(e)}')
+        #         raise e
+        return func
 
     @api.command(keyword=['--start'],
                  name='run',
@@ -102,7 +100,7 @@ class FlaskBase(base.ParkLY):
     def port(self,
              port: int = 5000
              ) -> None:
-        self.context.port = port
+        self.context.port = int(port)
 
     @api.command(keyword=['-h', '--host'],
                  name='host',
@@ -127,8 +125,8 @@ class FlaskBase(base.ParkLY):
     def render(self,
                html: str = None,
                **kwargs
-               ) -> bytes:
-        url_rule = self.context.request.url_rule.rule
+               ) -> str:
+        url_rule = request.url_rule.rule
         js_paths = []
         css_paths = []
         if isinstance(self.js_paths, (list, tuple)):
@@ -141,7 +139,9 @@ class FlaskBase(base.ParkLY):
         elif isinstance(self.css_paths, dict):
             css_paths = self.css_paths.get(url_rule, [])
         if html:
+            html_name = uuid.uuid4().hex + '.html'
             if os.path.exists(html):
+                html_name = os.path.basename(html)
                 html = self.open(html, mode='r')
             html = self.load('js_or_css', args={
                 'path': js_paths + css_paths + self.js_paths_gl + self.css_paths_gl,
@@ -151,16 +151,21 @@ class FlaskBase(base.ParkLY):
                 'old_html': html
             })
         else:
+            html_name = 'index.html'
             html = self.load('js_or_css', args={
                 'path': js_paths + css_paths + self.js_paths_gl + self.css_paths_gl,
                 'html': self.context.old_html
             })
         base_path = os.path.join(os.path.dirname(__file__), 'templates')
-        base_name = self.exists_rename(os.path.join(base_path, 'index.html'))
+        base_name = os.path.join(base_path, html_name)
         mkdir(base_path)
-        self.open(base_name, mode='w', datas=html)
+        if not os.path.exists(base_name):
+            self.open(base_name, mode='w', datas=html)
+        if html != self.context.old_html:
+            base_name = self.exists_rename(base_name)
+            self.open(base_name, mode='w', datas=html)
         self.context.cache_files.append(base_name)
-        return self.context.render_template(os.path.basename(base_name), **kwargs)
+        return render_template(os.path.basename(base_name), **kwargs)
 
     def _load_js_or_css(self,
                         path: Any,
@@ -183,8 +188,9 @@ class FlaskBase(base.ParkLY):
                 two_level = os.path.splitext(path)[1].replace('.', '')
                 mkdir(os.path.join(base_path, two_level))
                 two_level_name = os.path.join(two_level, os.path.basename(path))
-                cache_path = self.exists_rename(os.path.join(base_path, two_level_name))
-                self.open(cache_path, mode='w', datas=file)
+                cache_path = os.path.join(base_path, two_level_name)
+                if not os.path.exists(cache_path):
+                    self.open(cache_path, mode='w', datas=file)
             else:
                 continue
             self.context.cache_files.append(cache_path)
@@ -198,12 +204,33 @@ class FlaskBase(base.ParkLY):
             js_paths.append(js_path)
         js_paths = '\n'.join(js_paths)
         os.sep = old_sep
+        jquery = f"""<script type="text/javascript" src="https://code.jquery.com/jquery-3.6.3.min.js"></script>"""
         if isinstance(html, str):
-            return html.replace('</head>', f'   {js_paths}\n</head>')
+            html = html.replace('</html>', f'   {js_paths}\n</html>')
+            return html.replace('</head>', f'   {jquery}\n</head>')
         elif isinstance(html, bytes):
-            return html.decode('utf-8').replace('</head>', f'   {js_paths}\n</head>')
+            return html.decode('utf-8').replace('</html>', f'   {js_paths}\n</html>')
         else:
             return html
+
+    def Response(self, html,
+                 delete: bool = False,
+                 timeout: int = None,
+                 cookies: Union[dict, str] = None,
+                 **kwargs):
+        res = make_response(self.render(html=html, **kwargs))
+        if cookies is None:
+            cookies = {}
+        elif cookies == 'all' and delete:
+            cookies = dict(request.cookies)
+        for k, v in cookies.items():
+            if not delete:
+                if k == 'time':
+                    v = str(int(v))
+                res.set_cookie(k, v, max_age=timeout)
+            else:
+                res.delete_cookie(k)
+        return res
 
     def _load_images(self):
         pass

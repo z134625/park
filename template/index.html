@@ -2,14 +2,36 @@
 <head>
     <title>ChatGPT 测试</title>
 </head>
+<html>
 
-<body>
-<h3>Park ZLY </h3>
-<form action="/" method="post">
-    <input type="text" name="msg" placeholder="输入询问的问题" required/>
-    <input type="submit" value="提交"/>
-</form>
-{% if result %}
-<div class="result">{{ result }}</div>
-{% endif %}
-</body>
+    <body>
+    {% if username %}
+    <h3>欢迎 {{ username }}</h3>
+    {% else %}
+    <h3>PARK ZLY</h3>
+    {% endif %}
+    {% if login_type %}
+    <div class="kuai">
+        <h2  style="text-align: center;">聊天室</h2>
+        <div class="li">
+            <div id="chat" class="content" >
+            </div>
+        </div>
+        <div class="send">
+            <textarea class="text" type="text" id="inp"></textarea>
+        </div>
+    </div>
+    <button id="user" value="{{ username }}" type="button" onclick="send_inp()">提交</button>
+    {% else %}
+    <form action="/login" method="post">
+        <input type="text" name="username" placeholder="输入用户名" required/>
+        {% if login_error %}
+        <input type="submit" value="重新登录"/>
+        {% else %}
+        <input type="submit" value="登录"/>
+        {% endif %}
+    </form>
+    {% endif %}
+    </body>
+
+</html>

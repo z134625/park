@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="SqlDialectMappings">
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/8dfa003e-4926-40ac-8c5f-caf11845b5fb/console.sql" dialect="SQLite" />
     <file url="file://$PROJECT_DIR$/park/sql/mysql/user.py" dialect="GenericSQL" />
     <file url="PROJECT" dialect="MySQL" />
   </component>

@@ -1,12 +1,14 @@
 import configparser
 import json
 import os
+from typing import Union, Any
 
 from .paras import SettingParas
 from ...utils.base import ParkLY
 from ...tools import (
     readPy,
-    warning
+    warning,
+    _Context
 )
 
 
@@ -21,6 +23,10 @@ class Setting(ParkLY):
     _name = 'setting'
     paras = SettingParas()
 
+    @property
+    def setting(self) -> _Context:
+        return self._setting
+
     def _load_setting(self,
                       path: str,
                       **kwargs: dict
@@ -31,6 +37,7 @@ class Setting(ParkLY):
         :param kwargs:
         :return : 对象本身
         """
+        self._setting = _Context({})
         if path:
             set_list = []
             _, suffix = os.path.splitext(path)
@@ -60,7 +67,7 @@ class Setting(ParkLY):
                 d = {}
                 lines = self.open(file=path,
                                   encoding=kwargs.get("encoding", None),
-                                  readline=True)
+                                  lines=True)
                 for line in lines:
                     try:
                         key, value = line.split("=")
@@ -73,7 +80,35 @@ class Setting(ParkLY):
                 set_list += list(d.items())
             else:
                 raise IOError(f"暂不支持该格式({suffix})配置文件")
+            self._setting.update(dict(set_list))
             self.paras.update({
                 '_attrs': set_list
             })
         return self
+
+    def give(self,
+             obj: Union[Any],
+             content: dict = None
+             ):
+        """
+        此方法用于将自身属性给予给出的参数
+        不提供content 则将自身的 新增的属性赋给 obj对象
+        content 必须为字典形式
+        以 key 变量名， value 变量值 可以为方法， 也可以为值
+        """
+        if not content:
+            if isinstance(obj, ParkLY):
+                obj.update({
+                    'setting': self.setting
+                })
+                return obj
+            return self
+        else:
+            assert isinstance(content, dict)
+            for key, value in content.items():
+                if callable(value):
+                    setattr(obj, key, value)
+                else:
+                    setattr(obj, key, value)
+            obj.paras._attrs.update(content)
+            return self

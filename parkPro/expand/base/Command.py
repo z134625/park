@@ -243,7 +243,7 @@ class Command(ParkLY):
     def _re_commands(self,
                      S: str
                      ) -> None:
-        res = re.match(r'(--[a-zA-Z0-9]+)=(\S+)', S)
+        res = re.match(r'(--[a-zA-Z0-9-_]+)=(\S+)', S)
         if res:
             if res.group(1) in self.context.command_keyword:
                 info = self.context.command_info[self.context.command_keyword[res.group(1)]]

@@ -1,4 +1,6 @@
 from typing import Tuple
+
+from ....tools import _Context
 from ....utils.paras import Paras
 
 
@@ -23,4 +25,5 @@ class SettingParas(Paras):
         """
         _error: bool = False
         _suffix_ini: Tuple[str, str, str] = ('.ini', '.cfg', '.conf')
+        _setting = _Context({})
         return locals()

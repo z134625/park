@@ -14,6 +14,7 @@ class FlaskBaseParas(paras.Paras):
             'js_paths_gl': [],
             'css_paths_gl': [],
             'image_paths_gl': [],
+
         }
         context = _Context({
             'app': None,
@@ -21,7 +22,9 @@ class FlaskBaseParas(paras.Paras):
             'is_init': False,
             'host': '127.0.0.1',
             'port': 5000,
-            'cache_files': []
+            'cache_files': [],
+            'user_dict': {},
+            'user_list': [],
         })
         flags = {'flask_route_flag': True}
         return locals()

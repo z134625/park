@@ -186,7 +186,7 @@ class ParkLY(object, metaclass=Basics):
     def _get_type_func(self,
                        ty: str,
                        key: str,
-                       args: Union[Tuple[Any], None] = None
+                       args: Union[Any, None] = None
                        ) -> None:
         if ty:
             name = f'_{ty}_{key}'
@@ -211,7 +211,7 @@ class ParkLY(object, metaclass=Basics):
              lines: bool = False,
              datas: Any = None,
              get_file: bool = False
-             ) -> TextIO | None | Any:
+             ) -> Union[TextIO, None, Any]:
         method = None
         write = False
         if mode in ['r', 'rb']:
@@ -272,6 +272,11 @@ class ParkLY(object, metaclass=Basics):
                       encoding=self._save_encoding if 'b' not in mode else None,
                       datas=value
                       )
+
+    def get(self, content: dict) -> Any:
+        assert isinstance(content, dict)
+        self.update(content)
+        return self
 
     def sudo(self,
              gl: bool = False
@@ -420,33 +425,6 @@ class ParkLY(object, metaclass=Basics):
             pickle_data = pickle.load(f)
             return pickle_data
         return self.paras._attrs
-
-    def give(self,
-             obj: Union[Any],
-             content: dict = None
-             ):
-        """
-        此方法用于将自身属性给予给出的参数
-        不提供content 则将自身的 新增的属性赋给 obj对象
-        content 必须为字典形式
-        以 key 变量名， value 变量值 可以为方法， 也可以为值
-        """
-        if not content:
-            if isinstance(obj, ParkLY):
-                obj.paras.update({
-                    '_attrs': self.paras._attrs
-                })
-                return obj
-            return self
-        else:
-            assert isinstance(content, dict)
-            for key, value in content.items():
-                if callable(value):
-                    setattr(obj, key, value)
-                else:
-                    setattr(obj, key, value)
-            obj.paras._attrs.update(content)
-            return self
 
     def exists_rename(self,
                       path: str,
