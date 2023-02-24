@@ -8,7 +8,9 @@ class ormParas(paras.Paras):
         _attrs = {
             'create_db': True,
             'cr': None,
-            '_table': None
+            '_table': None,
+            'SQL_TYPE': 'sqlite3',
+            'connection': None
         }
         context = _Context({
             'host': '',

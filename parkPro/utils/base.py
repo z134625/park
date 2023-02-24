@@ -10,7 +10,8 @@ from typing import (
     Union,
     Any,
     Set,
-    Tuple, TextIO
+    Tuple,
+    TextIO
 )
 from types import (
     FunctionType,
@@ -24,12 +25,14 @@ from ..tools import (
     mkdir,
     warning,
     _Context,
-    listPath
+    listPath,
+    args_tools
 )
 from .env import env
+from ._type import _ParkLY
 
 
-class ParkLY(object, metaclass=Basics):
+class ParkLY(_ParkLY, metaclass=Basics):
     """
     为工具类中的基类，
     该类定义一些基础方法供使用
@@ -40,7 +43,11 @@ class ParkLY(object, metaclass=Basics):
     root_func: List[str] = []
     paras: Paras = Paras()
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(
+            cls,
+            *args,
+            **kwargs
+    ):
         """
         定义配置文件
         注册系统函数， 无权限不可调用
@@ -55,44 +62,16 @@ class ParkLY(object, metaclass=Basics):
         res = super().__new__(cls)
         return res
 
-    def __init__(self, **kwargs):
+    def __init__(
+            self,
+            **kwargs
+    ):
         self.init(**kwargs)
 
-    # def __call__(self, func=None, root: bool = False):
-    #     """
-    #     增加属性方法
-    #     root 将对增加的方法施加管理员权限，
-    #     当开启管理设置、 或自身方法调用时将不做限制
-    #     """
-    #     if func:
-    #         setattr(self, func.__name__, MethodType(func, self))
-    #
-    #         def warp(*args, **kwargs):
-    #             try:
-    #                 return func(self, *args, **kwargs)
-    #             except TypeError:
-    #                 return func(*args, **kwargs)
-    #
-    #         return warp
-    #
-    #     def wrapper(func_s):
-    #         if root:
-    #             self.root_func += [func_s.__name__]
-    #         setattr(self, func_s.__name__, MethodType(func_s, self))
-    #
-    #         def warps(*args, **kwargs):
-    #             try:
-    #                 return func_s(self, *args, **kwargs)
-    #             except TypeError:
-    #                 return func_s(*args, **kwargs)
-    #
-    #         return warps
-    #
-    #     return wrapper
-
-    def init(self,
-             **kwargs
-             ) -> None:
+    def init(
+            self,
+            **kwargs
+    ) -> None:
         """
         类实例化时的初始化方法
         该方法将更新 环境变量中对应的对象
@@ -107,9 +86,10 @@ class ParkLY(object, metaclass=Basics):
         for f in dir(self):
             eval(f'self.{f}')
 
-    def update(self,
-               K: dict = None
-               ) -> Union[Any]:
+    def update(
+            self,
+            K: dict = None
+    ) -> _ParkLY:
         if K is None:
             return self
         self.paras.update({
@@ -118,17 +98,19 @@ class ParkLY(object, metaclass=Basics):
         return self
 
     @classmethod
-    def _root_func(cls,
-                   func: Union[Any, str]
-                   ) -> None:
+    def _root_func(
+            cls,
+            func: Union[Any, str]
+    ) -> None:
         if sys._getframe(1).f_code.co_name in ('__new__', '__setattr__'):
             name = func if isinstance(func, str) else func.__name__
             if name not in cls.paras.root_func:
                 cls.paras.root_func.append(name)
 
-    def __getattribute__(self,
-                         item: str
-                         ):
+    def __getattribute__(
+            self,
+            item: str
+    ) -> Any:
         """
         该对象不允许直接获取 以_开头的私有属性
         当开启root 权限时 即可 正常获取
@@ -155,9 +137,10 @@ class ParkLY(object, metaclass=Basics):
         except AttributeError:
             return self.__getitem__(item)
 
-    def __getitem__(self,
-                    item: str
-                    ):
+    def __getitem__(
+            self,
+            item: str
+    ):
         if item.startswith('speed_info_'):
             func = re.match(r'^speed_info_([a-zA-Z_]\w+)', item)
             if func:
@@ -169,10 +152,11 @@ class ParkLY(object, metaclass=Basics):
         else:
             return False
 
-    def __setattr__(self,
-                    key: str,
-                    value: Union[Any]
-                    ):
+    def __setattr__(
+            self,
+            key: str,
+            value: Union[Any]
+    ):
         if key == 'root_func' and sys._getframe(1).f_code.co_name == 'wrapper':
             assert isinstance(value, (list, tuple))
             for val in value:
@@ -183,35 +167,30 @@ class ParkLY(object, metaclass=Basics):
             return res
         return super(ParkLY, self).__setattr__(key, value)
 
-    def _get_type_func(self,
-                       ty: str,
-                       key: str,
-                       args: Union[Any, None] = None
-                       ) -> None:
+    def _get_type_func(
+            self,
+            ty: str,
+            key: str,
+            args: Union[Any, None] = None
+    ) -> None:
         if ty:
             name = f'_{ty}_{key}'
             if hasattr(self, name):
-                if callable(args):
-                    args = args(self)
-                if isinstance(args, (tuple, list)):
-                    args = (args, {})
-                elif isinstance(args, dict):
-                    args = ((), args)
-                else:
-                    args = ((args,), {})
+                args = args_tools(args=args, self=self)
                 res = eval(f'self.{name}(*args, **kwargs)',
                            {'self': self, 'args': args[0] or (), 'kwargs': args[1] or {}}
                            )
                 return res
 
-    def open(self,
-             file: str,
-             mode: str = 'r',
-             encoding: Union[None, str] = 'utf-8',
-             lines: bool = False,
-             datas: Any = None,
-             get_file: bool = False
-             ) -> Union[TextIO, None, Any]:
+    def open(
+            self,
+            file: str,
+            mode: str = 'r',
+            encoding: Union[None, str] = 'utf-8',
+            lines: bool = False,
+            datas: Any = None,
+            get_file: bool = False
+    ) -> Union[TextIO, None, Any]:
         method = None
         write = False
         if mode in ['r', 'rb']:
@@ -225,6 +204,8 @@ class ParkLY(object, metaclass=Basics):
             else:
                 write = True
                 method = 'writelines' if lines else 'write'
+        if 'b' in mode:
+            encoding = None
         if method:
             res = None
             f = open(file, mode, encoding=encoding)
@@ -239,20 +220,25 @@ class ParkLY(object, metaclass=Basics):
                 f.close()
             return res
 
-    def save(self,
-             key: Union[str, None] = None,
-             args: Union[Tuple[Any], None] = None
-             ) -> None:
+    def save(
+            self,
+            key: Union[str, None] = None,
+            args: Union[Tuple[Any], None] = None
+    ) -> None:
         if key:
             return self._get_type_func(ty='save', key=key, args=args)
 
-    def _save_log(self, name) -> None:
+    def _save_log(
+            self,
+            name
+    ) -> None:
         self._save_file(key='log', name=name)
 
-    def _save_file(self,
-                   key=None,
-                   name: str = 'park'
-                   ) -> None:
+    def _save_file(
+            self,
+            key=None,
+            name: str = 'park'
+    ) -> None:
         keys = self._save_io
         if key:
             keys = [key]
@@ -273,32 +259,38 @@ class ParkLY(object, metaclass=Basics):
                       datas=value
                       )
 
-    def get(self, content: dict) -> Any:
+    def get(
+            self,
+            content: dict
+    ) -> _ParkLY:
         assert isinstance(content, dict)
         self.update(content)
         return self
 
-    def sudo(self,
-             gl: bool = False
-             ) -> Any:
+    def sudo(
+            self,
+            gl: bool = False
+    ) -> _ParkLY:
         """
         开启root权限
         """
         return self.with_root(gl=gl)
 
-    def with_root(self,
-                  gl: bool = False
-                  ) -> Any:
+    def with_root(
+            self,
+            gl: bool = False
+    ) -> _ParkLY:
         """
         生成带root权限的对象
         obj表示该类的实例
         """
         return self.with_paras(_root=True, gl=gl)
 
-    def with_context(self,
-                     context: dict = None,
-                     gl: bool = False
-                     ) -> Any:
+    def with_context(
+            self,
+            context: dict = None,
+            gl: bool = False
+    ) -> _ParkLY:
         """
         携带上下文 新上下文的对象 默认为 字典形式
         :param context: 增加上下文的内容
@@ -307,10 +299,11 @@ class ParkLY(object, metaclass=Basics):
         """
         return self.with_paras(context=context or {}, gl=gl)
 
-    def with_paras(self,
-                   gl: bool = False,
-                   **kwargs
-                   ) -> Any:
+    def with_paras(
+            self,
+            gl: bool = False,
+            **kwargs
+    ) -> _ParkLY:
         """
         修改配置主方法， 此方法将生成一个 一摸一样的新对象， 本质基本不变
         :param gl: 是否全局设置属性， 即修改自身， 默认为否， 创造一个新对对象修改配置
@@ -344,7 +337,9 @@ class ParkLY(object, metaclass=Basics):
             return self
 
     @property
-    def context(self) -> _Context:
+    def context(
+            self
+    ) -> _Context:
         """
         直接获取该实例的上下文
         :return : 上下文context
@@ -352,17 +347,20 @@ class ParkLY(object, metaclass=Basics):
         return self.paras.context
 
     @property
-    def flags(self) -> _Context:
+    def flags(
+            self
+    ) -> _Context:
         """
         直接获取该实例的上下文
         :return : 上下文context
         """
         return self.paras.flags
 
-    def _save_pickle(self,
-                     file: Union[str, io.FileIO, io.BytesIO] = None,
-                     data: Any = None
-                     ) -> Union[str, io.FileIO, io.BytesIO]:
+    def _save_pickle(
+            self,
+            file: Union[str, io.FileIO, io.BytesIO] = None,
+            data: Any = None
+    ) -> Union[str, io.FileIO, io.BytesIO]:
         """
         :param file: 保持序列化数据位置， 不提供则不保存，
         :param data: 需要序列化的数据， 不提供则序列化加载的配置文件内容
@@ -384,16 +382,18 @@ class ParkLY(object, metaclass=Basics):
                 file.write(pickle_data)
         return file
 
-    def load(self,
-             key: Union[str, None] = None,
-             args: Union[Tuple[Tuple[Any], dict], dict, List, Tuple, None] = None
-             ):
+    def load(
+            self,
+            key: Union[str, None] = None,
+            args: Union[Tuple[Tuple[Any], dict], dict, List, Tuple, None] = None
+    ):
         if key:
             return self._get_type_func(ty='load', key=key, args=args)
 
-    def _load_decorator(self,
-                        func: Union[MethodType, FunctionType]
-                        ) -> Union[MethodType, FunctionType]:
+    def _load_decorator(
+            self,
+            func: Union[MethodType, FunctionType]
+    ) -> Union[MethodType, FunctionType]:
         flag_func = list(filter(lambda x: x.endswith('_flag'), dir(func)))
         flag_attrs = {}
         for f in flag_func:
@@ -408,10 +408,11 @@ class ParkLY(object, metaclass=Basics):
                 setattr(func, k, v)
         return func
 
-    def _load_pickle(self,
-                     path: str = None,
-                     data: Any = None
-                     ) -> Union[dict, Any]:
+    def _load_pickle(
+            self,
+            path: str = None,
+            data: Any = None
+    ) -> Union[dict, Any]:
         """
         :param path: 保持序列化数据位置， 不提供则为 加载文件属性，
         :param data: 需要反序列化的数据， 不提供则为 加载文件属性
@@ -426,11 +427,12 @@ class ParkLY(object, metaclass=Basics):
             return pickle_data
         return self.paras._attrs
 
-    def exists_rename(self,
-                      path: str,
-                      paths: List[str] = None,
-                      clear: bool = False,
-                      dif: bool = False) -> str:
+    def exists_rename(
+            self,
+            path: str,
+            paths: List[str] = None,
+            clear: bool = False,
+            dif: bool = False) -> str:
         if not clear:
             if os.path.isdir(path):
                 if path.endswith('/'):
@@ -457,13 +459,14 @@ class ParkLY(object, metaclass=Basics):
             else:
                 return path
 
-    def generate_name(self,
-                      name: str,
-                      names: Iterable,
-                      mode: int = 0,
-                      dif: bool = False,
-                      suffix: bool = '',
-                      ) -> str:
+    def generate_name(
+            self,
+            name: str,
+            names: Iterable,
+            mode: int = 0,
+            dif: bool = False,
+            suffix: bool = '',
+    ) -> str:
         if mode == 1:
             name, suffix = os.path.splitext(name)
             names = list(

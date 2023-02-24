@@ -20,34 +20,41 @@ class IntellectBase(base.ParkLY):
     _inherit = 'tools'
     paras = IntellectParas()
 
-    def init(self,
-             **kwargs
-             ) -> None:
+    def init(
+            self,
+            **kwargs
+    ) -> None:
         super().init(**kwargs)
         self.init_base(self.init_setting())
 
-    def check_init(self) -> bool:
+    def check_init(
+            self
+    ) -> bool:
         return bool(self.context.is_init)
 
-    def init_setting(self,
-                     ) -> None:
+    def init_setting(
+            self,
+    ) -> None:
         pass
 
-    def init_base(self,
-                  path: str = None
-                  ) -> None:
+    def init_base(
+            self,
+            path: str = None
+    ) -> None:
         if path is None:
             path = self.context.setting_path
         if not self.check_init():
-            self.env['setting'].load('setting', args=(path, )).give(self)
+            self.env['setting'].load('setting', args=(path,)).give(self)
             self.context.is_init = True
 
-    @api.monitor(fields='ab',
-                 args=lambda x: {'y': x.a, 'x': x.b},
-                 ty=api.MONITOR_FUNC
-                 )
+    # @api.monitor(fields='ab',
+    #              args=lambda x: {'y': x.a, 'x': x.b},
+    #              ty=api.MONITOR_FUNC
+    #              )
     @functools.lru_cache()
-    def ap(self):
+    def ap(
+            self
+    ):
         self.a = 100
         self.b = 1000
         # with self.progress(enum=False, epoch_show=True, log_file=None) as pg:

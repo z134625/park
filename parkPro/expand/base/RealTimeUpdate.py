@@ -16,18 +16,32 @@ class RealTimeUpdate(ParkLY):
     _inherit = ['monitor']
     paras = RealTimeUpdateParas()
 
-    def start(self):
+    def start(
+            self
+    ):
         return self._start()
 
-    @api.monitor('_process', ty=MONITOR_FUNC)
-    def add_process(self, func, args, kwargs):
+    @api.monitor(
+        '_process',
+        ty=MONITOR_FUNC
+    )
+    def add_process(
+            self,
+            func,
+            args,
+            kwargs
+    ):
         sub_p = Process(target=func, args=args, kwargs=kwargs)
         return {sub_p.pid: sub_p}
 
-    def _start(self):
+    def _start(
+            self
+    ):
         self._start_parent()
 
-    def _start_parent(self):
+    def _start_parent(
+            self
+    ):
         path = os.getcwd()
         for sub in self._sub_process:
             sub.start()
@@ -47,7 +61,9 @@ class RealTimeUpdate(ParkLY):
                         self.start_process = time.time()
                         n += 1
 
-    def _process(self):
+    def _process(
+            self
+    ):
         sub = self._return
         if sub and isinstance(sub, dict):
             sub_pid = list(sub.keys())[0]

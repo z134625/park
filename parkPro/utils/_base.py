@@ -1,4 +1,3 @@
-
 from typing import (
     Union,
     Tuple,
@@ -9,13 +8,22 @@ from typing import (
 from .paras import Paras
 from .env import env, Io
 from .api import reckon_by_time_run
+from ..tools import _Context
 
 
-def _update_attrs_dict(
+def update_attrs_dict(
         name: str,
         K: dict,
         attrs: dict
 ) -> dict:
+    """
+    用于更新属性中字典，避免同名覆盖
+    例如:
+    attrs = {'a': {'b': 1}}
+    K = {'a': {'c': 1}}
+    attrs.update(K) -> {'a': {'c': 1}}
+    update_attrs_dict('a', K, attrs) -> {'a': {'c': 1, 'b': 1}}
+    """
     if name in attrs:
         attrs[name].update(K)
     else:
@@ -23,14 +31,34 @@ def _update_attrs_dict(
     return attrs
 
 
+def update_changeable_var(
+        old: dict,
+        new: dict,
+        var=None
+):
+    """
+    该方法用于 对var中的键 做出可变修改
+    与update_attrs_dict一致
+    """
+    if var is None:
+        var = []
+    for v in var:
+        update_attrs_dict(v, old.get(v), new)
+        old.pop(v)
+    new.update(old)
+
+
 def _inherit_parent(
         inherits: Union[str, List[str], Tuple[str]],
         attrs: dict
 ) -> Tuple[Tuple[Any], dict]:
+    """
+    用于查找父类并从父类继承属性，
+    """
     bases = []
     all_attrs = {}
     _attrs = {}
-    _context = {}
+    _context = _Context()
     _flags = {}
     if isinstance(inherits, str):
         parent = env[attrs.get('_inherit')]
@@ -41,21 +69,15 @@ def _inherit_parent(
         _attrs.update(parent.paras._attrs)
         _context.update(parent.paras.context)
         _flags.update(parent.paras.flags)
-        all_attrs = _update_attrs_dict('_attrs', _attrs, all_attrs)
-        all_attrs = _update_attrs_dict('context', _context, all_attrs)
-        all_attrs = _update_attrs_dict('flags', _flags, all_attrs)
+        update_changeable_var(old={'_attrs': _attrs,
+                                   'context': _context,
+                                   'flags': _flags,
+                                   },
+                              new=all_attrs,
+                              var=['_attrs', 'context', 'flags'])
         if 'paras' in attrs and isinstance(attrs['paras'], Paras):
-            _attr = attrs['paras']._attrs
-            _context = attrs['paras'].context
-            new_attrs = attrs['paras'].init()
-            if '_attrs' in new_attrs:
-                new_attrs.pop('_attrs')
-            if 'context' in new_attrs:
-                new_attrs.pop('context')
-            all_attrs.update(new_attrs)
-            all_attrs = _update_attrs_dict('_attrs', _attrs, all_attrs)
-            all_attrs = _update_attrs_dict('context', _context, all_attrs)
-            all_attrs = _update_attrs_dict('flags', _flags, all_attrs)
+            old = {**attrs['paras']._init(), **attrs['paras'].init()}
+            update_changeable_var(old, all_attrs, var=['_attrs', 'context', 'flags'])
             attrs['paras'].update(all_attrs)
         else:
             paras = Paras()
@@ -69,28 +91,17 @@ def _inherit_parent(
             all_attrs.update(parent.paras.init())
             _attrs.update(parent.paras._attrs)
             _context.update(parent.paras.context)
-            all_attrs = _update_attrs_dict('_attrs', _attrs, all_attrs)
-            all_attrs = _update_attrs_dict('context', _context, all_attrs)
-            all_attrs = _update_attrs_dict('flags', _flags, all_attrs)
+            _flags.update(parent.paras.flags)
+            update_changeable_var(old={'_attrs': _attrs,
+                                       'context': _context,
+                                       'flags': _flags,
+                                       },
+                                  new=all_attrs,
+                                  var=['_attrs', 'context', 'flags'])
             bases += [parent]
         if 'paras' in attrs and isinstance(attrs['paras'], Paras):
-            _attr = attrs['paras']._attrs
-            _context = attrs['paras'].context
-            new_attrs = attrs['paras'].init()
-            if '_attrs' in new_attrs:
-                new_attrs.pop('_attrs')
-            if 'context' in new_attrs:
-                new_attrs.pop('context')
-            all_attrs.update(new_attrs)
-            if '_attrs' in all_attrs:
-                all_attrs['_attrs'].update(_attrs)
-            else:
-                all_attrs['_attrs'] = _attrs
-
-            if 'context' in all_attrs:
-                all_attrs['context'].update(_context)
-            else:
-                all_attrs['context'] = _context
+            old = {**attrs['paras']._init(), **attrs['paras'].init()}
+            update_changeable_var(old, all_attrs, var=['_attrs', 'context', 'flags'])
             attrs['paras'].update(all_attrs)
         else:
             paras = Paras()
@@ -101,20 +112,26 @@ def _inherit_parent(
 
 
 class Basics(type):
+    """
+    基础元类，对继承等操作进行补充
+    """
     _park_Basics = True
 
-    def __new__(mcs,
-                name: str,
-                bases: tuple,
-                attrs: dict
-                ):
+    def __new__(
+            mcs,
+            name: str,
+            bases: tuple,
+            attrs: dict
+    ):
         """
         重组定义的类，
         增加新的属性__new_attrs__
         添加默认属性 paras
         """
-        mappings = set()
+        mappings = list()
         _attrs = attrs.items()
+        if attrs['__qualname__'] == 'a':
+            a = 1
         if attrs['__qualname__'] != 'ParkLY':
             if not attrs.get('_name') and not attrs.get('_inherit'):
                 raise AttributeError("必须设置_name属性")
@@ -122,9 +139,9 @@ class Basics(type):
                 if 'paras' not in attrs or ('paras' in attrs and not isinstance(attrs['paras'], Paras)):
                     attrs['paras'] = Paras()
             for key, val in _attrs:
-                if key not in ['__module__', '__qualname__']:
+                if not key.startswith('__') and not key.endswith('__'):
                     attrs[key] = reckon_by_time_run(val)
-                    mappings.add(key)
+                    mappings.append(key)
         res = type.__new__(mcs, name, bases, attrs)
         # 存在_name _inherit 属性 ->（说明创造的类是继承父类的所有信息，并生成一个新类）
         if attrs.get('_name') and attrs.get('_inherit'):
@@ -147,8 +164,7 @@ class Basics(type):
         setattr(res, 'env', env)
         setattr(res, 'io', Io())
         if hasattr(res, '__new_attrs__'):
-            setattr(res, '__new_attrs__', mappings.union(res.__new_attrs__))
+            setattr(res, '__new_attrs__', res.__new_attrs__ + mappings)
         else:
             setattr(res, '__new_attrs__', mappings)
         return res
-

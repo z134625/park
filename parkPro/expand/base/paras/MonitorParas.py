@@ -18,8 +18,12 @@ class MonitorParas(Paras):
         context = _Context({
             'return_result': False,
             'funcName': None,
-            'monitor_fields': set(),
-            'monitor_func': {},
-            'monitor_func_args': {}
+            'monitor_before_fields': set(),
+            'monitor_after_fields': set(),
+            'monitor_before_func': {},
+            'monitor_after_func': {},
+            'monitor_func_before_args': {},
+            'monitor_func_after_args': {},
         })
+        flags = {'monitor_flag': True}
         return locals()

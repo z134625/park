@@ -14,12 +14,14 @@ class OpenAi(base.ParkLY):
     _name = 'openai'
     _inherit = ['intellect']
 
-    def init_api(self,
+    def init_api(
+            self,
                  ) -> Any:
         openai.api_key = self.setting.OPENAI_API_KEY
         return self
 
-    def _request_openai(self,
+    def _request_openai(
+            self,
                         msg: str
                         ) -> Union[Any]:
         assert self.context.is_init
@@ -52,7 +54,8 @@ class OpenAi(base.ParkLY):
         return text
 
     @functools.lru_cache()
-    def test(self,
+    def test(
+            self,
              msg: str,
              ) -> Union[Any, bool]:
         if self.check_init():

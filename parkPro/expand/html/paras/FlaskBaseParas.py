@@ -10,16 +10,16 @@ class FlaskBaseParas(paras.Paras):
             'setting_path': '',
             'js_paths': [],
             'css_paths': [],
-            'image_paths': [],
+            'images_path': [],
             'js_paths_gl': [],
             'css_paths_gl': [],
-            'image_paths_gl': [],
-
+            'cache_path': 'all',
         }
         context = _Context({
             'app': None,
             'request': None,
             'is_init': False,
+            'is_load_images': False,
             'host': '127.0.0.1',
             'port': 5000,
             'cache_files': [],

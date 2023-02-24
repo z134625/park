@@ -20,7 +20,7 @@ from ...utils import (
     base,
     api
 )
-from ...tools import mkdir, remove
+from ...tools import mkdir, remove, listPath
 from .paras import FlaskBaseParas
 
 
@@ -29,15 +29,18 @@ class FlaskBase(base.ParkLY):
     _inherit = 'tools'
     paras = FlaskBaseParas()
 
-    def flask_init(self):
+    def flask_init(
+            self
+    ):
         pass
 
-    def init_setting(self,
-                     path: str
-                     ) -> None:
+    def init_setting(
+            self,
+            path: str
+    ) -> None:
         if not self.paras.context.is_init:
             self.flask_init()
-            self.env['setting'].load('setting', args=(path or self.setting_path, )).give(self)
+            self.env['setting'].load('setting', args=(path or self.setting_path,)).give(self)
             self.context.update({
                 'app': Flask(__name__),
                 'is_init': True,
@@ -47,13 +50,15 @@ class FlaskBase(base.ParkLY):
             self.host()
             CORS(self.context.app, resources=r'/*')
 
-    @api.monitor(fields='init_setting',
-                 args=lambda x: x.setting_path,
+    @api.monitor(fields={api.MONITOR_ORDER_BEFORE: 'init_setting', api.MONITOR_ORDER_AFTER: 'load'},
+                 before_args=lambda x: x.setting_path,
+                 after_args='images',
                  ty=api.MONITOR_FUNC,
                  order=api.MONITOR_ORDER_BEFORE)
-    def _flask_route_flag(self,
-                          func: Union[FunctionType, MethodType]
-                          ) -> Union[FunctionType, MethodType]:
+    def _flask_route_flag(
+            self,
+            func: Union[FunctionType, MethodType]
+    ) -> Union[FunctionType, MethodType]:
         if hasattr(func, 'flask_route_flag'):
             route_func = self.context.app.route(*func.flask_route_flag['args'],
                                                 **func.flask_route_flag['kwargs']
@@ -61,71 +66,88 @@ class FlaskBase(base.ParkLY):
             return route_func
         return func
 
-    def _log_route(self, func):
-        # def warp(*args, **kwargs):
-        #     url = request.url
-        #     try:
-        #         res = func(*args, **kwargs)
-        #         self.env.log.debug(f'[{url}] {request.method} : 成功')
-        #         return res
-        #     except Exception as e:
-        #         self.env.log.error(f'[{url}] {request.method} : {str(e)}')
-        #         raise e
-        return func
+    def _log_route(
+            self,
+            func
+    ):
+        func_str = """
+def {func_name}(*args, **kwargs):
+    url = request.url
+    try:
+        res = func(*args, **kwargs)
+        env.log.debug(f'[%s] %s : 成功' % (url, request.method))
+        return res
+    except Exception as e:
+        env.log.error(f'[%s] %s : %s' % (url, request.method, str(e)))
+        raise e
+        """.format(func_name=func.__name__)
+        new_func = compile(func_str, '', 'exec')
+        return FunctionType(new_func.co_consts[0], {'env': self.env, 'request': request, 'func': func})
 
-    @api.command(keyword=['--start'],
-                 name='run',
-                 unique=True,
-                 priority=10
-                 )
-    def run(self) -> None:
+    @api.command(
+        keyword=['--start'],
+        name='run',
+        unique=True,
+        priority=10
+    )
+    def run(
+            self
+    ) -> None:
         assert self.context.app
         try:
             print()
             self.context.app.run(host=self.context.host, port=self.context.port)
         finally:
-            self.save('log', args=('flask_log', ))
+            self.save('log', args=('flask_log',))
             self.delete_cache()
 
-    def delete_cache(self):
+    def delete_cache(
+            self
+    ):
         for file in self.context.cache_files:
             if os.path.exists(file):
                 remove(file)
 
-    @api.command(keyword=['-p', '--port'],
-                 name='port',
-                 unique=True,
-                 priority=0
-                 )
-    def port(self,
-             port: int = 5000
-             ) -> None:
+    @api.command(
+        keyword=['-p', '--port'],
+        name='port',
+        unique=True,
+        priority=0
+    )
+    def port(
+            self,
+            port: int = 5000
+    ) -> None:
         self.context.port = int(port)
 
-    @api.command(keyword=['-h', '--host'],
-                 name='host',
-                 unique=True,
-                 priority=0,
-                 )
-    def host(self,
-             host: str = '127.0.0.1'
-             ) -> None:
+    @api.command(
+        keyword=['-h', '--host'],
+        name='host',
+        unique=True,
+        priority=0,
+    )
+    def host(
+            self,
+            host: str = '127.0.0.1'
+    ) -> None:
         self.context.host = host
 
-    @api.command(keyword=['-p', '--path'],
-                 name='path',
-                 unique=True,
-                 priority=0,
-                 )
+    @api.command(
+        keyword=['-p', '--path'],
+        name='path',
+        unique=True,
+        priority=0,
+    )
     def path(self,
              path: str
              ) -> None:
         self.setting_path = path
 
-    def render(self,
-               html: str = None,
-               **kwargs
-               ) -> str:
+    def render(
+            self,
+            html: str = None,
+            **kwargs
+    ) -> str:
         url_rule = request.url_rule.rule
         js_paths = []
         css_paths = []
@@ -164,13 +186,15 @@ class FlaskBase(base.ParkLY):
         if html != self.context.old_html:
             base_name = self.exists_rename(base_name)
             self.open(base_name, mode='w', datas=html)
-        self.context.cache_files.append(base_name)
+        if base_name not in self.cache_path and self.cache_path != 'all':
+            self.context.cache_files.append(base_name)
         return render_template(os.path.basename(base_name), **kwargs)
 
-    def _load_js_or_css(self,
-                        path: Any,
-                        html: Union[str, bytes]
-                        ) -> Union[str, bytes]:
+    def _load_js_or_css(
+            self,
+            path: Any,
+            html: Union[str, bytes]
+    ) -> Union[str, bytes]:
         paths = []
         if isinstance(path, str):
             paths = [path]
@@ -193,7 +217,8 @@ class FlaskBase(base.ParkLY):
                     self.open(cache_path, mode='w', datas=file)
             else:
                 continue
-            self.context.cache_files.append(cache_path)
+            if cache_path not in self.cache_path and self.cache_path != 'all':
+                self.context.cache_files.append(cache_path)
             url = url_for('static', filename=two_level_name)
             if os.name == 'nt':
                 url = url.replace('%5C', '/')
@@ -213,11 +238,12 @@ class FlaskBase(base.ParkLY):
         else:
             return html
 
-    def Response(self, html,
-                 delete: bool = False,
-                 timeout: int = None,
-                 cookies: Union[dict, str] = None,
-                 **kwargs):
+    def Response(
+            self, html,
+            delete: bool = False,
+            timeout: int = None,
+            cookies: Union[dict, str] = None,
+            **kwargs):
         res = make_response(self.render(html=html, **kwargs))
         if cookies is None:
             cookies = {}
@@ -232,5 +258,27 @@ class FlaskBase(base.ParkLY):
                 res.delete_cookie(k)
         return res
 
-    def _load_images(self):
-        pass
+    def _load_images(
+            self
+    ):
+        if not self.paras.context.is_load_images:
+            base_path = os.path.join(os.path.dirname(__file__), 'static')
+            paths = self.images_path
+            images = []
+            if os.path.isdir(paths):
+                images = listPath(paths, suffix=['BMP', 'JPG', 'JPEG', 'JPEG', 'GIF'], splicing=True)
+            elif os.path.isfile(paths):
+                images = [paths]
+            for image in images:
+                file_name = os.path.basename(image)
+                file = self.open(image, mode='rb')
+                base_path = os.path.join(base_path, 'images')
+                mkdir(base_path)
+                path = os.path.join(base_path, file_name)
+                if not os.path.exists(path):
+                    self.open(path, mode='wb', datas=file)
+                    if image not in self.cache_path and self.cache_path != 'all':
+                        self.context.cache_files.append(path)
+            self.context.update({
+                'is_load_images': True,
+            })

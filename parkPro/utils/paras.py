@@ -13,9 +13,10 @@ from ..tools import (
     _Context
 )
 from .env import env
+from ._type import _Paras
 
 
-class Paras:
+class Paras(_Paras):
     """
     配置基础类
     含有参数
@@ -32,10 +33,11 @@ class Paras:
     _ban: List[str] = ['_set_list', '_obj']
     _park_paras = True
 
-    def __init__(self,
-                 allow: bool = True,
-                 **kwargs: dict
-                 ):
+    def __init__(
+            self,
+            allow: bool = True,
+            **kwargs: dict
+    ):
         """
         默认初始化时允许设置属性
         """
@@ -94,12 +96,13 @@ class Paras:
         _obj: str = None
         return locals()
 
-    def _set_paras(self,
-                   allow: bool = True,
-                   kwargs: dict = None,
-                   sel: bool = False,
-                   is_obj: bool = False
-                   ) -> None:
+    def _set_paras(
+            self,
+            allow: bool = True,
+            kwargs: dict = None,
+            sel: bool = False,
+            is_obj: bool = False
+    ) -> None:
         """
         修改属性方法，
         """
@@ -164,9 +167,10 @@ class Paras:
         finally:
             self._allow = False
 
-    def _get_cls_dir(self,
-                     obj: Any = None
-                     ) -> List[str]:
+    def _get_cls_dir(
+            self,
+            obj: Any = None
+    ) -> List[str]:
         """
         获取self对象包含的 方法
         """
@@ -174,10 +178,11 @@ class Paras:
             return dir(obj)
         return self._allow_set
 
-    def __setattr__(self,
-                    key: str,
-                    value: Any
-                    ):
+    def __setattr__(
+            self,
+            key: str,
+            value: Any
+    ):
         """
         该类不允许设置除 _allow 权限的属性
         若需要增加设置的属性
@@ -191,25 +196,30 @@ class Paras:
                 raise AttributeError('该类不允许设置属性(%s)' % key)
         return super(Paras, self).__setattr__(key, value)
 
-    def update(self,
-               kwargs: dict,
-               sel: bool = False,
-               is_obj: bool = False
-               ) -> Any:
+    def update(
+            self,
+            kwargs: dict,
+            sel: bool = False,
+            is_obj: bool = False
+    ) -> _Paras:
         """
         更新配置的一些属性
         """
         self._set_paras(allow=True, kwargs=kwargs, sel=sel, is_obj=is_obj)
         return self
 
-    def __getattr__(self, item):
+    def __getattr__(
+            self,
+            item
+    ):
         if item in self._get_cls_dir() or item.startswith('__') and item.endswith('__'):
             return super(Paras, self).__getattr__(item)
         return False
 
-    def _update(self,
-                sel: bool = False
-                ) -> Union[None]:
+    def _update(
+            self,
+            sel: bool = False
+    ) -> Union[None]:
         if self._obj:
             obj = env[self._obj]
             obj = setAttrs(obj=obj, self=sel)
@@ -221,6 +231,3 @@ class Paras:
             obj._save_mode = obj.save_mode if obj.save_mode else obj._save_mode
             return obj
         return None
-
-
-

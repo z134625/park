@@ -7,18 +7,26 @@ from io import (
 )
 from typing import (
     Union,
-    Any,
-    Callable,
     List
 )
 
 from ..tools import warning
+from ._type import _ParkLY
 
 
 class RegisterEnv:
-    __slots__ = ('log', '_mapping', '_mapping_info', 'ios', '_register_info', '_ios')
+    __slots__ = (
+        'log',
+        '_mapping',
+        '_mapping_info',
+        'ios',
+        '_register_info',
+        '_ios'
+    )
 
-    def __init__(self):
+    def __init__(
+            self
+    ):
         self._mapping: dict = {}
         self._mapping_info: dict = {}
         self._register_info = {}
@@ -29,10 +37,11 @@ class RegisterEnv:
         }
         self.log = logging
 
-    def init_log_config(self,
-                        level: int,
-                        show: bool,
-                        ) -> logging.Logger:
+    def init_log_config(
+            self,
+            level: int,
+            show: bool,
+    ) -> logging.Logger:
         if not level:
             level = logging.DEBUG
         logger = logging.getLogger(__file__)
@@ -53,12 +62,13 @@ class RegisterEnv:
         logger.addHandler(ch)
         return logger
 
-    def __call__(self,
-                 name: str,
-                 cl,
-                 warn: bool = True,
-                 inherit: bool = False
-                 ):
+    def __call__(
+            self,
+            name: str,
+            cl,
+            warn: bool = True,
+            inherit: bool = False
+    ):
         self._register(
             name=name,
             cl=cl,
@@ -66,12 +76,13 @@ class RegisterEnv:
             inherit=inherit
         )
 
-    def _register(self,
-                  name: str,
-                  cl,
-                  warn: bool = True,
-                  inherit: bool = False
-                  ):
+    def _register(
+            self,
+            name: str,
+            cl,
+            warn: bool = True,
+            inherit: bool = False
+    ):
         if name in self._mapping and not inherit:
             warning('该注册名(%s)已存在， 将覆盖旧的应用' % name, warn=warn)
         self._mapping.update(
@@ -101,40 +112,45 @@ class RegisterEnv:
                         self[item].__bases__ = tuple(bases)
                     if item in self._mapping_info:
                         update_attrs(item)
+
             update_attrs(name)
 
-    def __setattr__(self,
-                    key,
-                    value
-                    ):
+    def __setattr__(
+            self,
+            key,
+            value
+    ):
         if key == '_mapping' and sys._getframe(1).f_code.co_name != '__init__':
             raise AttributeError("不允许设置该属性%s" % key)
         return super(RegisterEnv, self).__setattr__(key, value)
 
-    def __getitem__(self,
-                    item: str
-                    ):
+    def __getitem__(
+            self,
+            item: str
+    ) -> _ParkLY:
         if item in self._mapping:
             return self._mapping[item]
         raise KeyError('没有注册该配置(%s)' % item)
 
-    def load(self,
-             level: Union[None, int] = None,
-             show: bool = True
-             ) -> None:
-        mapping = {}
+    def load(
+            self,
+            level: Union[None, int] = None,
+            show: bool = True
+    ) -> None:
         for key in self._mapping:
             if getattr(self._mapping[key], '_park_Basics'):
-                mapping.update({
-                    key: self._mapping[key]()
-                })
+                self._mapping[key]()
         self.log = self.init_log_config(level, show)
 
-    def clear(self) -> None:
+    def clear(
+            self
+    ) -> None:
         return self._mapping.clear()
 
     @property
-    def apps(self) -> List[str]:
+    def apps(
+            self
+    ) -> List[str]:
         return list(self._mapping.keys())
 
 
@@ -142,29 +158,36 @@ class Io:
     _io_key = None
     _io = None
 
-    def __call__(self,
-                 io_id: str = None
-                 ):
+    def __call__(
+            self,
+            io_id: str = None
+    ):
         self._io_key = io_id
         self._io = env.ios.get(io_id, None)
         return self
 
-    def __getitem__(self,
-                    item: str
-                    ):
+    def __getitem__(
+            self,
+            item: str
+    ):
         return Io()(io_id=item)
 
-    def clear(self) -> None:
+    def clear(
+            self
+    ) -> None:
         if self._io:
             io_obj = env.ios[self._io_key]
             env.ios[self._io_key] = io_obj.__class__()
 
-    def write(self,
-              msg: str
-              ) -> None:
+    def write(
+            self,
+            msg: str
+    ) -> None:
         self._io.write(msg)
 
-    def getvalue(self) -> Union[str, bytes]:
+    def getvalue(
+            self
+    ) -> Union[str, bytes]:
         return self._io.getvalue()
 
 

@@ -1,38 +1,25 @@
 import sqlite3
-from sqlite3 import Connection
+from typing import Any, Union, List, Tuple
 
 import pymysql
+import psycopg2
 
-from ...utils import base, api
+from ...utils import base
 from .paras import ormParas
+from ...utils._type import _ParkLY
 
 
-class IntellectBase(base.ParkLY):
+class ConnectBase(base.ParkLY):
     _name = 'parkOrm'
     paras = ormParas()
 
-    def register_fields(self,
-                        fields: dict
-                        ):
-        if '_table' not in fields or not fields['_table']:
-            return
-        _table = fields['_table']
-        self.update({
-            '_table': _table
-        })
-        register = f"""CREATE TABLE {_table}"""
-        fields.pop('_table')
-        for key, value in fields.items():
-            pass
-        self.context.cr.execute(register)
-
-    @staticmethod
-    def init_fields() -> dict:
-        pass
-
-    def connect(self, sql=None, **kwargs):
+    def connect(
+            self,
+            sql: str = None,
+            **kwargs
+    ) -> Union[_ParkLY, None]:
         if not kwargs:
-            if hasattr(self, 'SQL_TYPE'):
+            if not hasattr(self, 'SQL_TYPE'):
                 return
             if self.SQL_TYPE == 'sqlite3':
                 sql = 'sqlite3'
@@ -50,28 +37,62 @@ class IntellectBase(base.ParkLY):
                 }
         return self._get_type_func(ty='connect_sql', key=sql, args=kwargs)
 
-    def _connect_sql_sqlite3(self,
-                             path: str,
-                             ):
+    def _connect_sql_sqlite3(
+            self,
+            path: str,
+    ) -> _ParkLY:
         cr = sqlite3.connect(path, check_same_thread=False)
         self.update({
-            'cr': cr
+            'cr': cr.cursor(),
+            'connection': cr,
         })
         return self
 
-    def _connect_sql_mysql(self,
-                           user: str,
-                           password: str,
-                           database: str,
-                           host: str,
-                           port: int,
-                           ) -> Connection:
+    def _connect_sql_mysql(
+            self,
+            user: str,
+            password: str,
+            database: str,
+            host: str,
+            port: int,
+    ) -> _ParkLY:
         cr = pymysql.Connection(user=user,
                                 password=password,
                                 database=database,
                                 host=host,
                                 port=port)
         self.update({
-            'cr': cr
+            'cr': cr.cursor(),
+            'connection': cr,
         })
         return self
+
+    @property
+    def cr(
+            self
+    ) -> sqlite3.Cursor:
+        return self.cr
+
+    @property
+    def connection(
+            self
+    ) -> sqlite3.Connection:
+        return self.connection
+
+    def execute(
+            self,
+            s: str,
+            **kwargs
+    ) -> Union[bool, List[Union[Tuple]]]:
+        method = 'fetchall'
+        if kwargs.get('one'):
+            method = 'fetchone'
+        try:
+            self.cr.execute(s)
+            res = eval(f'self.cr.{method}()')
+            self.connection.commit()
+        except Exception as e:
+            self.env.log.error(e)
+            self.connection.rollback()
+            return False
+        return res

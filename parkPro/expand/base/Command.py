@@ -23,20 +23,22 @@ from ...utils.env import env
 
 class _ParkProgress(object):
 
-    def __init__(self,
-                 epoch_show: bool,
-                 enum: bool,
-                 ext: Union[None, List[str], Tuple[str]] = None
-                 ):
+    def __init__(
+            self,
+            epoch_show: bool,
+            enum: bool,
+            ext: Union[None, List[str], Tuple[str]] = None
+    ):
         self.epoch_show = epoch_show
         self.ext = ext
         self.enum = enum
 
-    def __call__(self,
-                 obj: Iterable,
-                 start: int = 0,
-                 step: int = 1
-                 ):
+    def __call__(
+            self,
+            obj: Iterable,
+            start: int = 0,
+            step: int = 1
+    ):
         self.obj = [item for item in obj]
         self._start = start
         self._step = step
@@ -44,10 +46,14 @@ class _ParkProgress(object):
         self._epoch = 0
         return self
 
-    def __iter__(self):
+    def __iter__(
+            self
+    ):
         return self
 
-    def __next__(self):
+    def __next__(
+            self
+    ):
         self._start += self._step
         if self._start > self._length:
             raise StopIteration
@@ -57,9 +63,10 @@ class _ParkProgress(object):
                 res = (self._start - self._step, self.obj[self._start - 1])
             return res
 
-    def bar(self,
+    def bar(
+            self,
             msgs: Union[str, None] = None
-            ) -> Callable[[Any, Iterable], None]:
+    ) -> Callable[[Any, Iterable], None]:
         def warp(
                 func: Union[FunctionType, MethodType],
                 items: Iterable
@@ -75,11 +82,12 @@ class _ParkProgress(object):
 
         return warp
 
-    def epoch(self,
-              msg: Union[str, None] = None,
-              typ: bool = True,
-              start: bool = False
-              ) -> str:
+    def epoch(
+            self,
+            msg: Union[str, None] = None,
+            typ: bool = True,
+            start: bool = False
+    ) -> str:
         log = env.log.debug
         if not start:
             msgs = f"\033[1;32;32m\r当前迭代第{self._epoch}，{msg or '....'} %s\033[0m\n"
@@ -94,14 +102,15 @@ class _ParkProgress(object):
             print(msgs % '', end='', flush=True)
         return msgs
 
-    def epochs(self,
-               func: Union[FunctionType, MethodType],
-               name: str = None,
-               args: Any = None,
-               error: Union[str, None] = None,
-               success: Union[str, None] = None,
-               bar: bool = False
-               ) -> Tuple[bool, str]:
+    def epochs(
+            self,
+            func: Union[FunctionType, MethodType],
+            name: str = None,
+            args: Any = None,
+            error: Union[str, None] = None,
+            success: Union[str, None] = None,
+            bar: bool = False
+    ) -> Tuple[bool, str]:
         try:
             msgs = self.epoch(start=True)
             kw = {}
@@ -146,10 +155,17 @@ class _ParkProgress(object):
         env.log.error(msgs)
         print(msgs)
 
-    def __enter__(self):
+    def __enter__(
+            self
+    ):
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+            self,
+            exc_type,
+            exc_val,
+            exc_tb
+    ):
         self._epoch = 0
         del self
 
@@ -158,20 +174,22 @@ class Command(ParkLY):
     _name = 'command'
     paras = CommandParas()
 
-    def _command_flag(self,
-                      res: Union[Any]
-                      ) -> Callable[[Tuple[Any], Dict[str, Any]], Any]:
+    def _command_flag(
+            self,
+            res: Union[Any]
+    ) -> Callable[[Tuple[Any], Dict[str, Any]], Any]:
         if hasattr(res, 'command_flag'):
             return self._command(res, **res.command_flag)
         return res
 
-    def _command(self,
-                 func: Union[FunctionType, MethodType],
-                 keyword: Union[str, List[str], Tuple[str]],
-                 name: str,
-                 unique: bool = False,
-                 priority: int = -1
-                 ) -> Callable[[Tuple[Any], Dict[str, Any]], Any]:
+    def _command(
+            self,
+            func: Union[FunctionType, MethodType],
+            keyword: Union[str, List[str], Tuple[str]],
+            name: str,
+            unique: bool = False,
+            priority: int = -1
+    ) -> Callable[[Tuple[Any], Dict[str, Any]], Any]:
         """
         装饰器 用于封装， 命令启动程序
         配置类command 装饰器使用
@@ -206,15 +224,17 @@ class Command(ParkLY):
             res = func(*args, **kwargs)
             return res
 
+        setattr(command_warps, '__func__', func)
         return command_warps
 
-    def progress(self, 
-                 enum: bool = True, 
-                 epoch_show: bool = True
-                 ) -> _ParkProgress:
+    def progress(
+            self,
+            enum: bool = True,
+            epoch_show: bool = True
+    ) -> _ParkProgress:
         return _ParkProgress(
-            epoch_show=epoch_show, 
-            enum=enum, 
+            epoch_show=epoch_show,
+            enum=enum,
             ext=self.context.ext_bar
         )
 
@@ -222,9 +242,10 @@ class Command(ParkLY):
         keyword=['--help'],
         name='help'
     )
-    def help(self,
-             order: str = None
-             ) -> None:
+    def help(
+            self,
+            order: str = None
+    ) -> None:
         """
         此操作将打印每种方法的帮助信息
         """
@@ -240,9 +261,10 @@ class Command(ParkLY):
             else:
                 print(f"""{order}: \n 没有该帮助， 请检查""")
 
-    def _re_commands(self,
-                     S: str
-                     ) -> None:
+    def _re_commands(
+            self,
+            S: str
+    ) -> None:
         res = re.match(r'(--[a-zA-Z0-9-_]+)=(\S+)', S)
         if res:
             if res.group(1) in self.context.command_keyword:
@@ -258,11 +280,12 @@ class Command(ParkLY):
                 })
                 self.context.command_k_true.append(S)
 
-    def main(self,
-             _commands: Union[List[str], Tuple[str], None] = None,
-             delay: Union[int, None] = None,
-             epoch_show: bool = True
-             ) -> None:
+    def main(
+            self,
+            _commands: Union[List[str], Tuple[str], None] = None,
+            delay: Union[int, None] = None,
+            epoch_show: bool = True
+    ) -> None:
         """
         命令行启动主程序
         """
@@ -277,7 +300,7 @@ class Command(ParkLY):
             index = commands.index(c) + 1
             args = None
             if index < len(commands) and \
-                    commands[index] not in command_keyword and\
+                    commands[index] not in command_keyword and \
                     commands[index] not in self.context.command_k_true:
                 args = commands[index]
             info = self.context.command_info[command_keyword[c]]
@@ -319,7 +342,9 @@ class Command(ParkLY):
                 return pg.error(msg='\n'.join(error))
         self.main_clear()
 
-    def main_clear(self) -> None:
+    def main_clear(
+            self
+    ) -> None:
         """
         用于清除本次main程序启动时增加的缓存变量
         """

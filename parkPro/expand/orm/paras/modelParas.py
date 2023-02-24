@@ -1,10 +1,12 @@
 from ....utils import paras
 
 
-class HtmlParas(paras.Paras):
+class modelParas(paras.Paras):
     @staticmethod
     def init() -> dict:
         _attrs = {
-            'is_init': False,
+            '_fields': {},
+            'fields': {},
+            'is_init': False
         }
         return locals()

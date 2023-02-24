@@ -24,13 +24,16 @@ class Setting(ParkLY):
     paras = SettingParas()
 
     @property
-    def setting(self) -> _Context:
+    def setting(
+            self
+    ) -> _Context:
         return self._setting
 
-    def _load_setting(self,
-                      path: str,
-                      **kwargs: dict
-                      ) -> object:
+    def _load_setting(
+            self,
+            path: str,
+            **kwargs: dict
+    ) -> object:
         """
         加载配置文件, 支持ini、json、py、txt
         :param path: 需要加载配置文件的路径
@@ -86,10 +89,11 @@ class Setting(ParkLY):
             })
         return self
 
-    def give(self,
-             obj: Union[Any],
-             content: dict = None
-             ):
+    def give(
+            self,
+            obj: Union[Any],
+            content: dict = None
+    ):
         """
         此方法用于将自身属性给予给出的参数
         不提供content 则将自身的 新增的属性赋给 obj对象

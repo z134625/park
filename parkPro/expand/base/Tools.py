@@ -41,9 +41,10 @@ class Tools(ParkLY):
     _inherit = ['monitor', 'command']
     paras = ToolsParas()
 
-    def try_response(self,
-                     func: Union[MethodType, FunctionType]
-                     ) -> Callable[[Tuple[Any], Dict[str, Any]], Optional[Any]]:
+    def try_response(
+            self,
+            func: Union[MethodType, FunctionType]
+    ) -> Callable[[Tuple[Any], Dict[str, Any]], Optional[Any]]:
 
         def warp(*args, **kwargs):
             method = self.context._method
@@ -75,9 +76,10 @@ class Tools(ParkLY):
 
         return warp
 
-    def try_response_async(self,
-                           func: Any
-                           ) -> Callable[[Tuple[Any], Dict[str, Any]], Optional[Any]]:
+    def try_response_async(
+            self,
+            func: Any
+    ) -> Callable[[Tuple[Any], Dict[str, Any]], Optional[Any]]:
         method = self.context._method
 
         async def warp(*args, **kwargs):
@@ -108,16 +110,22 @@ class Tools(ParkLY):
 
         return warp
 
-    @api.monitor(fields='_parse', ty=MONITOR_FUNC)
-    def _success_response(self,
-                          response: Response
-                          ):
+    @api.monitor(
+        fields='_parse',
+        ty=MONITOR_FUNC
+    )
+    def _success_response(
+            self,
+            response: Response
+    ):
         return response
 
-    def _request(self, urls: Union[str, List[str], Tuple[str]],
-                 is_async: bool = False,
-                 headers: Union[dict, None] = None,
-                 ):
+    def _request(
+            self,
+            urls: Union[str, List[str], Tuple[str]],
+            is_async: bool = False,
+            headers: Union[dict, None] = None,
+    ):
         if headers is None:
             headers = self.context.headers
         _async_request = self.try_response_async(self._async_request)
@@ -136,10 +144,11 @@ class Tools(ParkLY):
                 for _, url in enumerate(urls):
                     _normal_request(url, headers, _=_)
 
-    def _normal_request(self,
-                        url: str,
-                        headers: Union[str, dict]
-                        ) -> Response:
+    def _normal_request(
+            self,
+            url: str,
+            headers: Union[str, dict]
+    ) -> Response:
         self.context._url = url
         method = self.context._method
         response = None
@@ -149,10 +158,11 @@ class Tools(ParkLY):
             response = requests.post(url=url, headers=headers)
         return response
 
-    async def _async_request(self,
-                             url: Union[str],
-                             headers: Union[dict, None]
-                             ) -> Response:
+    async def _async_request(
+            self,
+            url: Union[str],
+            headers: Union[dict, None]
+    ) -> Response:
         self.context._url = url
         method = self.context._method
         async with httpx.AsyncClient(headers=headers) as client:
@@ -163,23 +173,28 @@ class Tools(ParkLY):
                 response = await client.post(url=url)
         return response
 
-    def parse(self,
-              response: Union[Response]
-              ) -> Response:
+    def parse(
+            self,
+            response: Union[Response]
+    ) -> Response:
         return response
 
-    def urls(self):
+    def urls(
+            self
+    ):
         return self.context.url
 
-    def request(self,
-                is_async: bool = False
-                ) -> None:
+    def request(
+            self,
+            is_async: bool = False
+    ) -> None:
         return self._request(urls=self.urls(), is_async=is_async)
 
-    def _parse(self,
-               response: Union[Response] = None,
-               _: int = 0
-               ) -> None:
+    def _parse(
+            self,
+            response: Union[Response] = None,
+            _: int = 0
+    ) -> None:
         bi = BytesIO()
         if not response:
             response = self._return
@@ -195,21 +210,28 @@ class Tools(ParkLY):
         #     f'{self._}': bi
         # })
 
-    @api.monitor('method', ty=MONITOR_VAR)
-    def _method_upper(self):
+    @api.monitor(
+        'method',
+        ty=MONITOR_VAR
+    )
+    def _method_upper(
+            self
+    ):
         self.context._method = self.context.method.upper()
 
-    def number_to_chinese(self,
-                          number: Union[int, float, str],
-                          cash: bool = False
-                          ) -> str:
+    def number_to_chinese(
+            self,
+            number: Union[int, float, str],
+            cash: bool = False
+    ) -> str:
         return self._number_to_chinese(number, cash)
 
     # 数字转中文主要方法
-    def _number_to_chinese(self,
-                           number: Union[int, float, str],
-                           cash: bool
-                           ) -> str:
+    def _number_to_chinese(
+            self,
+            number: Union[int, float, str],
+            cash: bool
+    ) -> str:
         base = 10000
         base_number = str(Decimal(number))
         str_list = []
@@ -269,9 +291,10 @@ class Tools(ParkLY):
         return int_chinese + float_chinese
 
     # 将四位数字转化为对应千分位中文读法
-    def _thousands_chinese(self,
-                           number: str
-                           ) -> str:
+    def _thousands_chinese(
+            self,
+            number: str
+    ) -> str:
         chinese_number = ''
         if number == '0000':
             return self.context.number_dict['0']
@@ -298,10 +321,11 @@ class Tools(ParkLY):
         return chinese_number
 
     # 小数部分处理
-    def _float_chinese(self,
-                       number: str,
-                       cash: bool
-                       ) -> str:
+    def _float_chinese(
+            self,
+            number: str,
+            cash: bool
+    ) -> str:
         float_chinese = ''
         division = ''
         if number:

@@ -4,7 +4,7 @@ import sys
 import warnings
 import logging
 
-from typing import Union, List, Any
+from typing import Union, List, Any, Tuple
 
 LISTFILE = 0
 LISTDIR = 1
@@ -65,6 +65,8 @@ def listPath(path: str, mode: int = LISTFILE, **kwargs) -> Union[list, map, filt
     elif mode == 1:
         dir_: bool = True
     like: str = kwargs.get("like", None)
+    suffix: list = kwargs.get('suffix', [])
+    suffix = list(map(lambda x: x.upper(), suffix))
     list_: bool = kwargs.get("list", True)
     splicing: bool = kwargs.get("splicing", False)
     files: List[str] = list(filter(lambda x: not x.startswith('.'), os.listdir(path)))
@@ -73,6 +75,8 @@ def listPath(path: str, mode: int = LISTFILE, **kwargs) -> Union[list, map, filt
     if dir_:
         files: filter = filter(lambda x: os.path.isdir(os.path.join(path, x)) if not x.startswith('.') else False,
                                files)
+    if suffix:
+        files: filter = filter(lambda x: os.path.splitext(x)[1][1:].upper() in suffix, files)
     if like:
         files: filter = filter(lambda x: like in x, files)
     if splicing:
@@ -190,6 +194,20 @@ def setAttrs(obj: Any, self: bool = False, cover: bool = True, warn: bool = True
             if cover:
                 setattr(obj, key, value)
     return obj
+
+
+def args_tools(args: Any, self=None) -> Tuple[tuple, dict]:
+    if callable(args) and self:
+        args = args(self)
+    if isinstance(args, (tuple, list)):
+        args = (args, {})
+    elif isinstance(args, dict):
+        args = ((), args)
+    elif args is not None:
+        args = ((args,), {})
+    else:
+        args = ((), {})
+    return args
 
 
 class _Context(dict):

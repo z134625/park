@@ -2,6 +2,7 @@ import time
 from flask import request, redirect, jsonify
 from flask_socketio import SocketIO, emit
 from parkPro.utils import api, base
+from . import models
 
 
 class Test(base.ParkLY):
@@ -15,9 +16,10 @@ class Test(base.ParkLY):
             'js_paths_gl': ['./js/room.js'],
             # 'css_paths': {'/': ['./css/room.css']},
             'setting_path': './conf.py',
+            'images_path': r'C:\Users\PC\Desktop'
         })
         self.context.update({
-            'cr': self.env['parkOrm'].connect('sqlite3', path='./test.db').cr.cursor(),
+            'cr': self.env['parkOrm'].connect('sqlite3', path='./test.db').cr,
             'msg': {}
         })
 
@@ -37,19 +39,24 @@ class Test(base.ParkLY):
     def login_web(self):
         if request.method == 'POST':
             username = request.form["username"]
-            self.context.cr.execute("SELECT count(*) FROM test WHERE name = '%s'" % username)
-            res = self.context.cr.fetchone()
-            if res and res[0] != 0:
+            user = self.env['flask.user'].search([('name', '=', username)], limit=1)
+            if user:
                 return self.Response('./template/index.html',
                                      cookies={
                                          'username': username,
                                          'time': time.time(),
                                      },
                                      timeout=30,
-                                     username=username,
+                                     username=user.display_name,
                                      login_type=True
                                      )
             else:
+                user.create({
+                    'name': 'cxk',
+                    'display_name': '蔡徐坤',
+                    'age': 23,
+                    'password': '1234'
+                })
                 return self.Response('./template/index.html',
                                      delete=True,
                                      cookies='all',
@@ -71,9 +78,11 @@ class Test(base.ParkLY):
     def ws(self):
         if request.method == 'POST':
             cookie = request.cookies
-            username = cookie.get('username')
-            openai = self.env['openai'].get({'setting': self.setting}).init_api()
+            # username = cookie.get('username')
+            user = self.env['flask.user'].search([('name', '=', 'cxk')], limit=1)
+            # openai = self.env['openai'].get({'setting': self.setting}).init_api()
             msg = request.form["msg"]
-            response = openai.test(msg)
-            return jsonify({'msg': response})
+            a = user.generator_msg(msg)
+            # response = openai.test(msg)
+            return jsonify({'msg': 123})
 

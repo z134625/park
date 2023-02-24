@@ -259,16 +259,11 @@ def devide(a1, b1):
 # re  re.compile 生产正则表达式  re.sub 正则替换 re.split 正则切割
 dic = {'yellow river': 'china', 'amazon river': 'brazil', 'nile': 'egypt'}
 
-for key, value in dic.items():
-    print(key.swapcase())
-    print(value.swapcase())
-    print(key + value)
-
-infos = [("Tom", 12), ("Bob", 22)]
-people = [{"姓名": i, "年龄": j} for i, j in infos]
-print(people)
-
-# if __name__ == '__main__':
-#     import doctest
+# for key, value in dic.items():
+#     print(key.swapcase())
+#     print(value.swapcase())
+#     print(key + value)
 #
-#     doctest.testmod()
+# infos = [("Tom", 12), ("Bob", 22)]
+# people = [{"姓名": i, "年龄": j} for i, j in infos]
+# print(people)

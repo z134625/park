@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<head>
+    <title>ChatGPT 测试</title>
+   <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
+</head>
+<html>
+
+    <body>
+    {% if username %}
+    <h3>欢迎 {{ username }}</h3>
+    {% else %}
+    <h3>PARK ZLY</h3>
+    {% endif %}
+    {% if login_type %}
+    <div class="kuai">
+        <h2  style="text-align: center;">聊天室</h2>
+        <div class="li">
+            <div id="chat" class="content" >
+            </div>
+        </div>
+        <div class="send">
+            <textarea class="text" type="text" id="inp"></textarea>
+        </div>
+    </div>
+    <button id="user" value="{{ username }}" type="button" onclick="send_inp()">提交</button>
+    {% else %}
+    <form action="/login" method="post">
+        <input type="text" name="username" placeholder="输入用户名" required/>
+        {% if login_error %}
+        <input type="submit" value="重新登录"/>
+        {% else %}
+        <input type="submit" value="登录"/>
+        {% endif %}
+    </form>
+    {% endif %}
+    </body>
+
+   <script type="text/javascript" src="/static/js/room.js"></script>
+<link type="text/css" rel="stylesheet" href="/static/css/index.css">
+<link type="text/css" rel="stylesheet" href="/static/css/room.css">
+</html>
