@@ -99,12 +99,12 @@ class Monitor(ParkLY):
                 *args,
                 **kwargs
         ):
-            root = self.paras._root
-            self.paras.update({'_root': True})
+            root = self.paras.ROOT
+            self.paras.update({'ROOT': True})
             self._monitoring_go(res=False, fields=before, func=func, arg=before_args)
             res = func(*args, **kwargs)
             self._monitoring_go(res=res, fields=after, func=func, arg=after_args)
-            self.paras.update({'_root': root})
+            self.paras.update({'ROOT': root})
             self.context.funcName = None
             return res
 

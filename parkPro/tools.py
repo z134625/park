@@ -1,8 +1,9 @@
 import os
+import re
 import shutil
 import sys
 import warnings
-import logging
+import hashlib
 
 from typing import Union, List, Any, Tuple
 
@@ -12,13 +13,13 @@ LISTALL = 2
 
 
 def warning(msg: str, warn: bool = True,
-            types: warnings = RuntimeWarning,
-            stacklevel: int = 2) -> None:
+            _type: warnings = RuntimeWarning,
+            level: int = 2) -> None:
     """
     警告方法，
     """
     if warn:
-        warnings.warn(msg, types, stacklevel=stacklevel)
+        warnings.warn(msg, _type, stacklevel=level)
     return
 
 
@@ -159,35 +160,35 @@ def setAttrs(obj: Any, self: bool = False, cover: bool = True, warn: bool = True
     obj.key = value
     self 参数在复制一个对象时， 会重复设置属性此时 为True避免重复警告  默认为False
     """
-    if hasattr(obj, 'paras') and hasattr(obj.paras, '_park_paras') and getattr(obj.paras, '_park_paras'):
+    if hasattr(obj, 'paras') and hasattr(obj.paras, 'PARK_PARAS') and getattr(obj.paras, 'PARK_PARAS'):
         cover: bool = True
         warn: bool = True
-        for key, value in obj.paras._set_list:
-            root = obj.paras._root
+        for key, value in obj.paras.SET_LIST:
+            root = obj.paras.ROOT
             if not root:
-                obj.paras._root = True
+                obj.paras.ROOT = True
             has: bool = key in dir(obj)
             if not root:
-                obj.paras._root = False
+                obj.paras.ROOT = False
             if not has:
                 setattr(obj, key, value)
             else:
                 warning("当前设置重复的属性(%s)，将覆盖该属性" % key,
-                        warn=(warn and obj.paras._warn) and (cover and obj.paras._cover) and not self)
-                if cover and obj.paras._cover:
+                        warn=(warn and obj.paras.WARN) and (cover and obj.paras.COVER) and not self)
+                if cover and obj.paras.COVER:
                     setattr(obj, key, value)
-            if obj.paras._root:
+            if obj.paras.ROOT:
                 d: dict = {
                     key: eval(f'obj.{key}')
                 }
             else:
-                obj.paras._root = True
+                obj.paras.ROOT = True
                 d: dict = {
                     key: eval(f'obj.{key}')
                 }
                 obj.paras._root = False
-            obj.paras._attrs.update(d)
-        obj.paras._set_list.clear()
+            obj.paras.ATTRS.update(d)
+        obj.paras.SET_LIST.clear()
     elif kwargs:
         for key, value in kwargs.items():
             warning("当前设置重复的属性(%s)，将覆盖该属性" % key, warn=warn and cover)
@@ -223,3 +224,74 @@ class _Context(dict):
             return self[item]
         raise AttributeError(f'属性错误, 没有该属性{item}')
 
+
+def length(s, **kwargs):
+    if kwargs.get('max', 999) >= len(s) >= kwargs.get('min', 0):
+        return True
+    else:
+        if len(s) < kwargs.get('min', 0):
+            raise ValueError('密码过短')
+        if len(s) > kwargs.get('max', 0):
+            raise ValueError('密码过长')
+
+
+def types(s, **kwargs):
+    pattern1 = re.compile(r'[a-z]')
+    pattern2 = re.compile(r'[A-Z]')
+    pattern3 = re.compile(r'[0-9]')
+    pattern4 = re.compile(r'[^0-9a-zA-Z]')
+    error = []
+    if not (kwargs.get('a_z') and re.search(pattern1, s)):
+        error.append('密码必须包含字母')
+    if not (kwargs.get('A_Z') and re.search(pattern2, s)):
+        error.append('密码必须包含大写字母')
+    if not (kwargs.get('number') and re.search(pattern3, s)):
+        error.append('密码必须包含数字')
+    if not (kwargs.get('sign') and re.search(pattern4, s)):
+        error.append('密码必须包含特殊符号')
+    if error:
+        raise ValueError('\n'.join(error))
+    return True
+
+
+def hard(s, **kwargs):
+    return True
+
+
+def _password_check(_PWD):
+    if v_project:
+        error = []
+        for v_p in v_project:
+            try:
+                eval(v_p.get('func'))(_PWD, **v_p.get('kwargs'))
+            except Exception as e:
+                error.append(str(e))
+        if error:
+            raise ValueError('\n'.join(error))
+    return True
+
+
+def get_password(pwd: str, reversal=False):
+    if _password_check(pwd):
+        if pwd_mode == 'md5':
+            m = hashlib.md5()
+            m.update(pwd.encode())
+        elif pwd_mode == 'sha1':
+            m = hashlib.sha1()
+            m.update(pwd.encode())
+        pwd = m.hexdigest()
+    return pwd
+
+
+def verification_pwd(_O, _N):
+    if get_password(_N) == _O:
+        return True
+    elif get_password(_O, reversal=True) == _O:
+        return True
+    else:
+        return False
+
+
+pwd_mode = 'md5'
+v_project = [
+]

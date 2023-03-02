@@ -1,0 +1,9 @@
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	main_web - 6 	 : 2023-02-26 16:17:55 
+	msg: [http://127.0.0.1:5000/] GET : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	login_web - 6 	 : 2023-02-26 16:17:55 
+	msg: [http://127.0.0.1:5000/login] GET : 成功
+[Z:\park\park\parkPro\utils\env.py]-[ERROR]: [](:) 
+	login_web - 9 	 : 2023-02-26 16:17:59 
+	msg: [http://127.0.0.1:5000/login] POST : module 'parkPro.setting' has no attribute 'host'

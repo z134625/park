@@ -66,18 +66,18 @@ def _inherit_parent(
             parent = parent.__class__
         bases = (parent,)
         all_attrs.update(parent.paras.init())
-        _attrs.update(parent.paras._attrs)
+        _attrs.update(parent.paras.ATTRS)
         _context.update(parent.paras.context)
         _flags.update(parent.paras.flags)
-        update_changeable_var(old={'_attrs': _attrs,
+        update_changeable_var(old={'ATTRS': _attrs,
                                    'context': _context,
                                    'flags': _flags,
                                    },
                               new=all_attrs,
-                              var=['_attrs', 'context', 'flags'])
+                              var=['ATTRS', 'context', 'flags'])
         if 'paras' in attrs and isinstance(attrs['paras'], Paras):
             old = {**attrs['paras']._init(), **attrs['paras'].init()}
-            update_changeable_var(old, all_attrs, var=['_attrs', 'context', 'flags'])
+            update_changeable_var(old, all_attrs, var=['ATTRS', 'context', 'flags'])
             attrs['paras'].update(all_attrs)
         else:
             paras = Paras()
@@ -89,19 +89,19 @@ def _inherit_parent(
             if not isinstance(parent, Basics):
                 parent = parent.__class__
             all_attrs.update(parent.paras.init())
-            _attrs.update(parent.paras._attrs)
+            _attrs.update(parent.paras.ATTRS)
             _context.update(parent.paras.context)
             _flags.update(parent.paras.flags)
-            update_changeable_var(old={'_attrs': _attrs,
+            update_changeable_var(old={'ATTRS': _attrs,
                                        'context': _context,
                                        'flags': _flags,
                                        },
                                   new=all_attrs,
-                                  var=['_attrs', 'context', 'flags'])
+                                  var=['ATTRS', 'context', 'flags'])
             bases += [parent]
         if 'paras' in attrs and isinstance(attrs['paras'], Paras):
             old = {**attrs['paras']._init(), **attrs['paras'].init()}
-            update_changeable_var(old, all_attrs, var=['_attrs', 'context', 'flags'])
+            update_changeable_var(old, all_attrs, var=['ATTRS', 'context', 'flags'])
             attrs['paras'].update(all_attrs)
         else:
             paras = Paras()
@@ -115,7 +115,6 @@ class Basics(type):
     """
     基础元类，对继承等操作进行补充
     """
-    _park_Basics = True
 
     def __new__(
             mcs,
@@ -130,8 +129,6 @@ class Basics(type):
         """
         mappings = list()
         _attrs = attrs.items()
-        if attrs['__qualname__'] == 'a':
-            a = 1
         if attrs['__qualname__'] != 'ParkLY':
             if not attrs.get('_name') and not attrs.get('_inherit'):
                 raise AttributeError("必须设置_name属性")

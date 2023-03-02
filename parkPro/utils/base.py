@@ -42,6 +42,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
     _inherit = None
     root_func: List[str] = []
     paras: Paras = Paras()
+    _type = 'normal'
 
     def __new__(
             cls,
@@ -77,9 +78,9 @@ class ParkLY(_ParkLY, metaclass=Basics):
         该方法将更新 环境变量中对应的对象
         未初始化的对对象， 环境变量中保存的未类
         """
-        self.paras.update({'_attrs': self.paras._attrs})
+        self.paras.update({'ATTRS': self.paras.ATTRS})
         self.paras.update(kwargs)
-        self.paras.update({'_obj': self._name}, is_obj=True)
+        self.paras.update({'OBJ': self._name}, is_obj=True)
         self.env._mapping.update({
             self._name: self
         })
@@ -93,7 +94,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
         if K is None:
             return self
         self.paras.update({
-            '_attrs': K
+            'ATTRS': K
         })
         return self
 
@@ -128,7 +129,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
                                 call_name not in self.__new_attrs__ and
                                 call_name not in dir(ParkLY)
                         ):
-                    if not self.paras._root and (hasattr(res, '__self__') and not isinstance(res.__self__, ParkLY)):
+                    if not self.paras.ROOT and (hasattr(res, '__self__') and not isinstance(res.__self__, ParkLY)):
                         raise AttributeError('此方法(%s)为管理员方法，不可调用' % item)
                 if 'reckon_by_time_run' in dir(res):
                     return _Reckon_by_time_run(res).__get__(self)
@@ -147,7 +148,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
                 if hasattr(self, func.group(1)):
                     eval('self.' + func.group(1) + '(park_time=True)')
             return super().__getattribute__('speed_info')
-        elif self.paras._error:
+        elif self.paras.ERROR:
             raise AttributeError('获取错误，没有该方法(%s)' % item)
         else:
             return False
@@ -161,10 +162,10 @@ class ParkLY(_ParkLY, metaclass=Basics):
             assert isinstance(value, (list, tuple))
             for val in value:
                 self._root_func(val)
-        if key not in set(dir(self)).difference(set(self.paras._attrs)):
-            res = super(ParkLY, self).__setattr__(key, value)
-            self.paras._attrs.update({key: value})
-            return res
+        if key not in set(dir(self)).difference(set(self.paras.ATTRS)):
+            super(ParkLY, self).__setattr__(key, value)
+            self.paras.ATTRS.update({key: value})
+            return
         return super(ParkLY, self).__setattr__(key, value)
 
     def _get_type_func(
@@ -239,23 +240,23 @@ class ParkLY(_ParkLY, metaclass=Basics):
             key=None,
             name: str = 'park'
     ) -> None:
-        keys = self._save_io
+        keys = self.save_io
         if key:
             keys = [key]
         for key in keys:
             value = self.io[key].getvalue()
-            save_path = os.path.join(self._save_path, key)
+            save_path = os.path.join(self.SAVE_PATH, key)
             mkdir(save_path)
             file = os.path.join(save_path, name +
-                                (f'.{self._save_suffix.get(key)}' if self._save_suffix.get(
-                                    key) else self._save_suffix.get(key, '')))
+                                (f'.{self.SAVE_SUFFIX.get(key)}' if self.SAVE_SUFFIX.get(
+                                    key) else self.SAVE_SUFFIX.get(key, '')))
             file = self.exists_rename(file)
-            mode = self._save_mode
+            mode = self.SAVE_MODE
             if isinstance(value, bytes):
-                mode = self._save_mode + 'b'
+                mode = self.SAVE_MODE + 'b'
             self.open(file,
                       mode=mode,
-                      encoding=self._save_encoding if 'b' not in mode else None,
+                      encoding=self.SAVE_ENCODING if 'b' not in mode else None,
                       datas=value
                       )
 
@@ -284,7 +285,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
         生成带root权限的对象
         obj表示该类的实例
         """
-        return self.with_paras(_root=True, gl=gl)
+        return self.with_paras(ROOT=True, gl=gl)
 
     def with_context(
             self,
@@ -316,14 +317,14 @@ class ParkLY(_ParkLY, metaclass=Basics):
             env(name=obj._name + '_paras', cl=obj, warn=False)
             paras.update({'_obj': obj._name + '_temporary'})
             if sys._getframe(1).f_code.co_name not in ('with_context', 'with_root'):
-                if '_root' in kwargs:
-                    kwargs.pop('_root')
+                if 'ROOT' in kwargs:
+                    kwargs.pop('ROOT')
                 if 'context' in kwargs:
                     kwargs.pop('context')
-            dif_set: Set[str] = set(kwargs.keys()).difference(set(self.paras._allow_set))
+            dif_set: Set[str] = set(kwargs.keys()).difference(set(self.paras.ALLOW_SET))
             if dif_set.__len__() >= 1:
                 msg = '没有' + '、'.join(dif_set) + '配置，不允许设置'
-                warning(msg, warn=kwargs.get('_warn', False) or self.paras._warn)
+                warning(msg, warn=kwargs.get('_warn', False) or self.paras.WARN)
             paras_dict: dict = {}
             for key in set(kwargs.keys()).difference(dif_set):
                 paras_dict.update({
@@ -367,7 +368,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
         :return : 序列化后的数据
         """
         if not data:
-            data: dict = self.paras._attrs
+            data: dict = self.paras.ATTRS
         pickle_data = pickle.dumps(data)
         if file:
             if isinstance(file, str):
@@ -425,7 +426,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
             f = open(path, 'rb')
             pickle_data = pickle.load(f)
             return pickle_data
-        return self.paras._attrs
+        return self.paras.ATTRS
 
     def exists_rename(
             self,

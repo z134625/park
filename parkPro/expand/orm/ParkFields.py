@@ -13,46 +13,53 @@ class Fields:
     _type = 'int'
     unique = False
     null = True
-    auto = False
     length = 32
-    commit = ''
     index = False
-    decimal = 2
     default = None
     primary_key = False
 
     def __init__(self, **kwargs):
         self.unique = kwargs.get('unique', False)
         self.null = kwargs.get('null', True)
-        self.auto = kwargs.get('auto', False)
         self.primary_key = kwargs.get('primary_key', False)
         self.length = kwargs.get('length', 32)
         self.index = kwargs.get('index', False)
-        self.decimal = kwargs.get('decimal', 2)
         self.default = kwargs.get('default', None)
-        self.comment = kwargs.get('comment', None)
+        if sql_type == 'mysql':
+            self.comment = kwargs.get('comment', None)
+        self._index = ['unique', 'index', 'primary_key']
+
+    def __getattribute__(self, item):
+        try:
+            res = super().__getattribute__(item)
+            return res
+        except AttributeError:
+            return False
+
+    @classmethod
+    def create_index(cls, fields, table, ty='create'):
+        if ty == 'create':
+            sql = ""
+            for field in fields:
+                if_e = ''
+                if sql_type == 'postgresql':
+                    if_e = 'IF NOT EXISTS'
+                sql += """
+    CREATE INDEX {if_e} {field}_index ON {table}({field});
+                """.format(field=field, table=table, if_e=if_e)
+            return sql
+        else:
+            return [['ADD INDEX', field + '_index', 'ON', f'({field})'] for field in fields]
 
     def self(self, obj=None):
         ty = ''
-        if self._type == 'integer':
-            ty = 'INTEGER'
-        elif self._type == 'float':
-            ty = 'NUMERIC' + "(%d, %d)" % (int(self.length), int(self.decimal))
-        elif self._type == 'char':
-            ty = 'VARCHAR' + "(%d)" % int(self.length)
-        elif self._type == 'date':
-            ty = 'DATE'
-        elif self._type == 'datetime':
-            ty = 'DATETIME'
-        elif self._type == 'json':
-            ty = 'JSON'
-        elif self._type == 'foreign key':
-            ty = 'INTEGER'
         plug = []
         if self.unique:
             plug += ['UNIQUE']
         if not self.null:
             plug += ['NOT NULL']
+        if self.null and sql_type not in ['sqlite', 'postgresql']:
+            plug += ['NULL']
         # if self.index:
         #     plug += ' INDEX '
         if self.default is not None:
@@ -61,20 +68,33 @@ class Fields:
                 plug += ['DEFAULT %s' % de]
         if self.comment and sql_type == 'mysql':
             plug += ['COMMENT %s' % self.format(self.comment)]
-        return ty + ' ', plug
+        return ty, plug
 
     @classmethod
-    def domain(cls, domain, connect='AND', not_1=False):
-        do = ['1 = 1']
-        if not_1:
-            do = []
+    def domain(cls, domain):
+        do = []
+        counter = 0
         if domain:
-            for d in domain:
+            for i, d in enumerate(domain):
+                if d == '|':
+                    counter += 2
                 if len(d) == 3:
-                    d = [d[0], d[1], cls.format(d[2])]
+                    field = cls.format_fields(d[0])
+                    sign = d[1]
+                    result = cls.format(d[2])
+                    if sign == 'like':
+                        result = cls.format(f'%{d[2]}%')
+                    d = [field, sign, result]
                     do.append(' '.join(d))
-        connect = f' {connect} '
-        return connect.join(do)
+                    if i < len(domain) - 1:
+                        if counter != 0:
+                            counter -= 2
+                            do.append('OR')
+                        else:
+                            do.append('AND')
+        if not do:
+            do.append('1 = 1')
+        return ' '.join(do)
 
     @classmethod
     def get(
@@ -92,7 +112,7 @@ class Fields:
         elif mode == 'max':
             sql = cls._max(table, vals)
         elif mode == 'create table':
-            sql = cls._create(ty='table', table=table, vals=vals, fk=kwargs.get('fk', None))
+            sql = cls._create(ty='table', table=table, vals=vals, fk=kwargs.get('fk'))
         elif mode == 'update table':
             sql = cls._update(ty='table', table=table, vals=vals)
         elif mode == 'select':
@@ -105,10 +125,18 @@ class Fields:
                 sql = ""
             elif sql_type == 'mysql':
                 sql = cls._alter(ty='MODIFY', table=table, vals=vals)
+            elif sql_type == 'postgresql':
+                sql = cls._alter(ty='ALTER COLUMN', table=table, vals=vals)
         elif mode == 'alter add':
-            sql = cls._alter(ty='ADD', table=table, vals=vals)
+            if sql_type == 'postgresql':
+                sql = cls._alter(ty='ADD COLUMN', table=table, vals=vals)
+            else:
+                sql = cls._alter(ty='ADD', table=table, vals=vals)
         elif mode == 'alter del':
-            sql = cls._alter(ty='DROP', table=table, vals=vals)
+            if sql_type == 'postgresql':
+                sql = cls._alter(ty='DROP COLUMN', table=table, vals=vals)
+            else:
+                sql = cls._alter(ty='DROP', table=table, vals=vals)
         elif mode == 'delete table':
             sql = cls._delete(table=table, vals=vals)
         return cls.format_sql(sql)
@@ -128,9 +156,10 @@ class Fields:
             for k, v in _Vs.items():
                 keys.append(k)
                 values.append(cls.format(v))
+            keys = map(lambda x: cls.format_fields(x), keys)
             sql = """
     INSERT INTO {table} ({ks}) VALUES ({vs});
-            """.format(table=table, ks=','.join(keys), vs=','.join(values))
+            """.format(table=cls.format_table(table), ks=','.join(keys), vs=','.join(values))
             return sql
 
         res = []
@@ -149,7 +178,7 @@ SELECT
     MAX({vals})
 FROM 
     {table}        
-        """.format(table=table, vals=vals)
+        """.format(table=cls.format_table(table), vals=cls.format_fields(vals))
         return sql
 
     @staticmethod
@@ -173,7 +202,7 @@ FROM
             v = "'{v}'".format(v=v)
         elif v is None:
             v = ''
-        elif isinstance(v, LambdaType):
+        elif callable(v):
             v = ''
         return v
 
@@ -189,10 +218,10 @@ FROM
 
     @classmethod
     def _create_table(cls, table, vals, fk=None) -> str:
-        v = map(lambda x: ' '.join(x), vals.items())
+        v = map(lambda x: cls.format_fields(x[0]) + ' ' + x[1][0] + ' ' + ' '.join(x[1][1]), vals.items())
         sql = """
 CREATE TABLE IF NOT EXISTS {table} ({v}
-        """.format(table=table, v=','.join(v))
+        """.format(table=cls.format_table(table), v=','.join(v))
         if fk:
             sql += ","
             for kf, vf in fk.items():
@@ -201,8 +230,10 @@ CREATE TABLE IF NOT EXISTS {table} ({v}
 CONSTRAINT {name}
 FOREIGN KEY ({keys})
 REFERENCES {model} (id)
-                    """.format(model=kf.replace('.', '_'), keys=fi, name=kf.replace('.', '_') + '_' + fi)
-        return sql + ")"
+                    """.format(model=kf.replace('.', '_'), keys=cls.format_fields(fi),
+                               name=kf.replace('.', '_') + '_' + fi)
+        sql += ");"
+        return sql
 
     @classmethod
     def _update_table(cls, table, vals) -> Union[bool, str]:
@@ -222,7 +253,7 @@ SET
     {v} 
 WHERE 
     {domain}
-        """.format(table=table, v=d, domain=domain)
+        """.format(table=cls.format_table(table), v=d, domain=domain)
         return sql
 
     @classmethod
@@ -234,13 +265,14 @@ WHERE
             limit,
     ) -> str:
         keys, vals = vals
+        keys = map(lambda x: cls.format_fields(x), keys)
         sql = """
 SELECT 
     {vals}
 FROM  {table}
 WHERE 
     {where}
-        """.format(table=table, vals=','.join(keys), where=vals)
+        """.format(table=cls.format_table(table), vals=','.join(keys), where=vals)
         if limit:
             sql += """
 LIMIT {limit}
@@ -260,26 +292,79 @@ FROM
     {table}
 WHERE 
     {where}
-        """.format(table=table, where=vals)
+        """.format(table=cls.format_table(table), where=vals)
         return sql
 
     @classmethod
     def _alter(cls, ty, table, vals) -> str:
-        v = [' '.join(vs) for vs in vals.items()]
-        if v:
-            sql = """
-ALTER TABLE {table} {ty} {v}
-            """.format(table=table, ty=ty, v=v[0])
-        else:
-            sql = ""
+        sql = ""
+        if 'ADD' in ty or 'DROP' in ty:
+            if 'ADD' in ty:
+                v = [str(k + ' ' + v[0] + ' '.join(v[1])) for k, v in vals.items()]
+            else:
+                v = [k + v for k, v in vals.items()]
+            if v:
+                sql = ""
+                for kv in v:
+                    sql += """
+ALTER TABLE {table} {ty} {v};
+                    """.format(table=cls.format_table(table), ty=ty, v=kv)
+            return sql
+        for k, v in vals.items():
+            k = cls.format_fields(k)
+            if sql_type == 'mysql':
+                if v.get('type'):
+                    r = [v.get('type')] + v.get('attrs', [])
+                    sql += """
+ALTER TABLE {table} {ty} {k} {v};
+                    """.format(table=table, ty=ty, k=k, v=' '.join(r))
+            else:
+                if v.get('type'):
+                    if sql_type == 'postgresql':
+                        sql += """
+ALTER TABLE {table} {ty} {k} TYPE {v};
+                        """.format(table=table, ty=ty, k=k, v=v.get('type'))
+                if v.get('attrs'):
+                    for a_v in v.get('attrs'):
+                        if sql_type == 'postgresql':
+                            sql += """
+    ALTER TABLE {table} {ty} {k} SET {v};
+                            """.format(table=table, ty=ty, k=k, v=a_v)
+            if v.get('a_index'):
+                for i in v.get('a_index'):
+                    suffix = f'{table}_{k}_key'
+                    if i == 'INDEX':
+                        suffix = f'{table}_{k}_index'
+                    if sql_type == 'mysql':
+                        sql += """
+ALTER TABLE {table} ADD INDEX {name} ({k});
+                        """.format(table=table, name=suffix, k=k)
+                    elif sql_type == 'postgresql':
+                        index_type = ''
+                        if i == 'UNIQUE':
+                            index_type = 'UNIQUE'
+                        sql += """
+CREATE {index_type} INDEX IF NOT EXISTS {name} ON {table}({k});
+                        """.format(index_type=index_type, table=table, name=suffix, k=k)
+            if v.get('d_index'):
+                for i in v.get('d_index'):
+                    suffix = f'{table}_{k}_key'
+                    if i == 'INDEX':
+                        suffix = f'{table}_{k}_index'
+                    if sql_type == 'mysql':
+                        sql += """
+DROP INDEX {name} ON {table};
+                        """.format(table=table, name=suffix)
+                    elif sql_type == 'postgresql':
+                        sql += """
+DROP INDEX IF EXISTS {name};
+                        """.format(table=table, name=suffix)
         return sql
 
     def __get__(self, instance, owner):
         var = instance.fields.get(id(self))
-        if instance.is_init:
+        if var and instance.is_init:
             if var and len(instance) == 1:
-                if isinstance(self, ForeIgnFields):
-                    return instance.env[self.foreign_key].browse(instance.read(var)[0][0])
                 return instance.read(var)[0][0]
             return False
         else:
@@ -300,29 +385,78 @@ ALTER TABLE {table} {ty} {v}
     def format_sql(sql):
         return re.sub(r'\s+', ' ', sql).strip()
 
+    @staticmethod
+    def format_fields(field):
+        if sql_type == 'postgresql':
+            return f'"{field}"'
+        return f'{field}'
+
+    @classmethod
+    def format_table(cls, table):
+        if sql_type == 'postgresql':
+            return '"public"."%s"' % table
+        return table
+
 
 class IntegerField(Fields):
     _type = 'integer'
 
+    def __init__(self, **kwargs):
+        self.auto = kwargs.get('auto', False)
+        super().__init__(**kwargs)
+
     def self(self, obj=None):
-        ty, plug = super(IntegerField, self).self(obj)
+        if self.primary_key:
+            self.null = False
+        ty = 'INTEGER'
+        _, plug = super(IntegerField, self).self(obj)
+        if self.auto and sql_type == 'postgresql':
+            ty = 'SERIAL'
         if self.primary_key:
             plug += ['PRIMARY KEY']
         if self.auto:
-            plug += ['AUTOINCREMENT']
+            if sql_type == 'mysql':
+                plug += ['AUTO_INCREMENT']
+            elif sql_type == 'sqlite':
+                plug += ['AUTOINCREMENT']
         return ty, plug
 
 
 class CharField(Fields):
     _type = 'char'
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.password = kwargs.get('password')
+
+    def self(self, obj=None):
+        ty = 'VARCHAR' + "(%d)" % int(self.length)
+        _, plug = super(CharField, self).self(obj)
+        return ty, plug
+
 
 class FloatField(Fields):
     _type = 'float'
 
+    decimal = 2
+
+    def __init__(self, **kwargs):
+        self.decimal = kwargs.get('decimal', 2)
+        super().__init__(**kwargs)
+
+    def self(self, obj=None):
+        ty = 'NUMERIC' + "(%d, %d)" % (int(self.length), int(self.decimal))
+        _, plug = super(FloatField, self).self(obj)
+        return ty, plug
+
 
 class DateField(Fields):
     _type = 'date'
+
+    def self(self, obj=None):
+        ty = 'DATE'
+        _, plug = super(DateField, self).self(obj)
+        return ty, plug
 
     @staticmethod
     def today():
@@ -332,6 +466,13 @@ class DateField(Fields):
 class DatetimeField(Fields):
     _type = 'datetime'
 
+    def self(self, obj=None):
+        ty = 'DATETIME'
+        if sql_type == 'postgresql':
+            ty = 'TIMESTAMP'
+        _, plug = super(DatetimeField, self).self(obj)
+        return ty, plug
+
     @staticmethod
     def today():
         return datetime.datetime.today()
@@ -340,13 +481,28 @@ class DatetimeField(Fields):
 class JsonField(Fields):
     _type = 'json'
 
+    def self(self, obj=None):
+        ty = 'JSON'
+        _, plug = super(JsonField, self).self(obj)
+        return ty, plug
+
     @staticmethod
-    def dumps(_Json: dict):
-        return json.dumps(_Json)
+    def dumps(_Json: dict, **kwargs):
+        return json.dumps(_Json, **kwargs)
 
     @staticmethod
     def loads(_Json: JsonType):
         return json.loads(_Json)
+
+    def __get__(self, instance, owner):
+        var = instance.fields.get(id(self))
+        if var and instance.is_init:
+            if var and len(instance) == 1:
+                res = instance.read(var)[0][0]
+                return res if isinstance(res, dict) else self.loads(res)
+            return False
+        else:
+            return self
 
 
 class ForeIgnFields(Fields):
@@ -355,8 +511,39 @@ class ForeIgnFields(Fields):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.foreign_key = kwargs.get('fk_model')
-#
-# FOREIGN KEY (department_id)
-# REFERENCES departments(department_id)
+
+    def self(self, obj=None):
+        ty = 'INTEGER'
+        _, plug = super(ForeIgnFields, self).self(obj)
+        return ty, plug
+
+    def __get__(self, instance, owner):
+        var = instance.fields.get(id(self))
+        if var and instance.is_init:
+            if var and len(instance) == 1:
+                return instance.env[self.foreign_key].browse(instance.read(var)[0][0])
+            return False
+        else:
+            return self
 
 
+class BoolFields(Fields):
+    _type = 'bool'
+
+    def self(self, obj=None):
+        ty = 'CHAR'
+        if sql_type == 'postgresql':
+            ty = 'BOOLEAN'
+        _, plug = super(BoolFields, self).self(obj)
+        return ty, plug
+
+    def __get__(self, instance, owner):
+        var = instance.fields.get(id(self))
+        if var and instance.is_init:
+            if var and len(instance) == 1:
+                if sql_type != 'postgresql':
+                    return eval(instance.read(var)[0][0])
+                return instance.read(var)[0][0]
+            return False
+        else:
+            return self

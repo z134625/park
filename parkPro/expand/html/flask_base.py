@@ -37,18 +37,19 @@ class FlaskBase(base.ParkLY):
     def init_setting(
             self,
             path: str
-    ) -> None:
+    ) -> bool:
         if not self.paras.context.is_init:
             self.flask_init()
             self.env['setting'].load('setting', args=(path or self.setting_path,)).give(self)
             self.context.update({
-                'app': Flask(__name__),
+                'app': Flask(__name__).route,
                 'is_init': True,
                 'old_html': '',
             })
             self.port()
             self.host()
             CORS(self.context.app, resources=r'/*')
+            return True
 
     @api.monitor(fields={api.MONITOR_ORDER_BEFORE: 'init_setting', api.MONITOR_ORDER_AFTER: 'load'},
                  before_args=lambda x: x.setting_path,
@@ -133,7 +134,7 @@ def {func_name}(*args, **kwargs):
         self.context.host = host
 
     @api.command(
-        keyword=['-p', '--path'],
+        keyword=['-c', '--config'],
         name='path',
         unique=True,
         priority=0,

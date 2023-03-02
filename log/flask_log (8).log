@@ -1,0 +1,21 @@
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [Z:\park\park\parkPro\expand\base\Command.py](Command.py:Command) 
+	epoch - 97 	 : 2023-02-25 13:03:35 
+	msg: 当前迭代第1，该程序(port)执行成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 13:03:42 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 13:03:49 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 13:03:51 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 13:03:53 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 13:04:24 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 13:04:33 
+	msg: [http://localhost:5003/ws] POST : 成功

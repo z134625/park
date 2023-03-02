@@ -135,11 +135,16 @@ class RegisterEnv:
     def load(
             self,
             level: Union[None, int] = None,
+            _type: str = None,
             show: bool = True
     ) -> None:
         for key in self._mapping:
             if getattr(self._mapping[key], '_park_Basics'):
-                self._mapping[key]()
+                _class = self._mapping[key]
+                if _type and getattr(_class, '_type', None) == _type:
+                    self._mapping[key]()
+                else:
+                    self._mapping[key]()
         self.log = self.init_log_config(level, show)
 
     def clear(

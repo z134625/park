@@ -6,7 +6,7 @@ from typing import Union, Any
 from ...utils import (
     base,
     api,
-    
+
 )
 
 
@@ -16,17 +16,17 @@ class OpenAi(base.ParkLY):
 
     def init_api(
             self,
-                 ) -> Any:
+    ) -> Any:
         openai.api_key = self.setting.OPENAI_API_KEY
         return self
 
     def _request_openai(
             self,
-                        msg: str
-                        ) -> Union[Any]:
+            msg: str
+    ) -> Union[Any]:
         assert self.context.is_init
         self.update({
-            '_error': False
+            'ERROR': False
         })
         paras = {
             'logprobs': 10,
@@ -56,8 +56,8 @@ class OpenAi(base.ParkLY):
     @functools.lru_cache()
     def test(
             self,
-             msg: str,
-             ) -> Union[Any, bool]:
+            msg: str,
+    ) -> Union[Any, bool]:
         if self.check_init():
             return self._request_openai(msg)
         return False

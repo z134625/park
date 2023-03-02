@@ -1,37 +1,22 @@
 import copy
-import json
 from typing import Tuple, Union, List, Any
-from types import LambdaType
 
+from ...tools import get_password
 from ...utils import base, api, env
-from .ormbase import ConnectBase
+
 from .ParkFields import (
     Fields,
     IntegerField,
     CharField,
     JsonField,
     DatetimeField,
-    ForeIgnFields
+    ForeIgnFields,
+    BoolFields
 )
 from . import ParkFields
 from ...utils._type import _ParkLY
 from .paras import modelParas
-
-
-class Env(env.env.__class__):
-
-    def __init__(
-            self,
-            cr: ConnectBase,
-            E: env.env.__class__
-    ):
-        super().__init__()
-        setattr(self, 'cr', cr)
-        for app in E.apps:
-            if hasattr(eval(f'E["{app}"]'), '_type') and eval(f'E["{app}"]._type') == 'orm':
-                self._mapping.update({
-                    app: E[app]
-                })
+from .model_env import model_env
 
 
 class Model(base.ParkLY):
@@ -39,6 +24,7 @@ class Model(base.ParkLY):
     _inherit = 'monitor'
     paras = modelParas()
     _type = 'orm'
+    _table = None
 
     id = IntegerField(auto=True, primary_key=True)
     create_date = DatetimeField(null=False, default=lambda x: x.create_date.today(), comment='数据插入时间')
@@ -50,16 +36,25 @@ class Model(base.ParkLY):
         self._id = 0
         self.is_init = False
         super().__init__(**kwargs)
+        self._table = self._name.replace('.', '_')
 
     def init(
             self,
             **kwargs
     ) -> None:
         super(Model, self).init(**kwargs)
-        setattr(self, 'env', Env(self.env['parkOrm'].connect('sqlite3', path='./test.db'), self.env))
+        setattr(self, 'env', model_env)
         self.get_fields()
-        self._rename_table()
-        self.update({'is_init': True})
+
+    def init_model(self):
+        if self.env.cr:
+            if self._name == 'model':
+                self._delete_table()
+            self._rename_table()
+            self.is_init = True
+
+    def _delete_table(self):
+        pass
 
     def _rename_table(
             self
@@ -74,66 +69,6 @@ class Model(base.ParkLY):
             if create_sql and flags and self.is_init and self._table != 'model':
                 return self.env.cr.execute(create_sql)
 
-    def change_table(
-            self,
-            old: dict,
-            new: dict
-    ) -> Tuple[Union[dict, bool], bool]:
-        code = False
-        create_sql = False
-        r = {}
-        a = {}
-        d = {}
-        keys = set(new.keys()).union(set(old.keys()))
-        for key in keys:
-            o = old.get(key)
-            n = new.get(key)
-            if o and n and ''.join(o.split(' ')) == ''.join(n.split(' ')):
-                pass
-            elif o and n and ''.join(o.split(' ')) != ''.join(n.split(' ')):
-                r.update({key: new.get(key)})
-            elif not o and n:
-                a.update({key: new.get(key)})
-            elif o and not n:
-                d.update({key: ''})
-            elif not o and not n:
-                d.update({key: ''})
-        if r or a or d:
-            code = new
-            create_sql = ''
-            create_sql += self._alter('update', r)
-            create_sql += self._alter('add', a)
-            create_sql += self._alter('del', d)
-        if r and ParkFields.sql_type == 'sqlite':
-            for i in r.keys():
-                code.update({
-                    i: old.get(i)
-                })
-        return code, create_sql
-
-    def _alter(
-            self,
-            ty: str,
-            vals: Union[str, dict, tuple, list]
-    ) -> str:
-        sql = """"""
-        if ty == 'update':
-            sql = Fields.get(mode='alter update',
-                             table=self._table,
-                             vals=vals
-                             )
-        elif ty == 'add':
-            sql = Fields.get(mode='alter add',
-                             table=self._table,
-                             vals=vals
-                             )
-        elif ty == 'del':
-            sql = Fields.get(mode='alter del',
-                             table=self._table,
-                             vals=vals
-                             )
-        return sql + ';' if sql else ''
-
     def create(
             self,
             vals: dict
@@ -146,14 +81,17 @@ class Model(base.ParkLY):
         _id = 1
         if result and result[0]:
             _id = result[0] + 1
+        self.is_init = False
         for f in self.fields.values():
-            self.update({'is_init': False})
             field = eval(f'self.{f}')
-            if field and field.default and isinstance(field.default, LambdaType):
+            if field and field.default and callable(field.default):
                 vals.update({
                     f: field.default(self)
                 })
-        self.update({'is_init': True})
+            if field and field.password and f in vals:
+                vals.update({f: get_password(vals[f])})
+
+        self.is_init = True
         sql = Fields.get(mode='insert',
                          table=self._table,
                          vals=vals
@@ -165,6 +103,15 @@ class Model(base.ParkLY):
             self,
             vals: dict
     ) -> bool:
+        self.is_init = False
+        for f in self.fields.values():
+            field = eval(f'self.{f}')
+            if field and field.password and f in vals:
+                vals.update({f: get_password(vals[f])})
+            if isinstance(field, BoolFields) \
+                    and ParkFields.sql_type != 'postgresql' and f in vals:
+                vals.update({f: 'True' if vals[f] else 'False'})
+        self.is_init = True
         update_sql = Fields.get(mode='update table',
                                 table=self._table,
                                 vals={tuple(self.ids): vals}
@@ -186,6 +133,9 @@ class Model(base.ParkLY):
         else:
             ids = _IDs
         obj = self.__class__()
+        obj.is_init = True
+        obj.update({'is_init': True})
+        obj.ids = []
         obj.ids = copy.deepcopy(ids)
         return obj
 
@@ -204,11 +154,8 @@ class Model(base.ParkLY):
             order: str = None,
             limit: int = None,
     ) -> List[int]:
-        res = self.read(domain=domain, order=order, limit=limit)
-        ids = []
-        for r in res:
-            if r[0]:
-                ids.append(r[0])
+        res = self.dict_read(fields='id', domain=domain, order=order, limit=limit)
+        ids = [r['id'] for r in res]
         return ids
 
     def read(
@@ -218,13 +165,44 @@ class Model(base.ParkLY):
             order: str = None,
             limit: int = None,
     ) -> List[List[Union[bool, Any]]]:
-        if domain is None:
-            domain = []
         _fields = tuple(self.fields.values())
         if isinstance(fields, str):
             fields = [fields]
         elif fields is None:
             fields = _fields
+        result = self.dict_read(fields=fields, domain=domain, order=order, limit=limit)
+        if result:
+            return [[res[key] for key in fields] for res in result]
+        return [[False for _ in fields]]
+
+    def dict_read(
+            self,
+            fields: Union[str, List[str], Tuple[str]] = None,
+            domain: List[Tuple[str, str, str]] = None,
+            order: str = None,
+            limit: int = None,
+    ):
+        result = self._read(domain=domain, order=order, limit=limit)
+        _fields = tuple(self.fields.values())
+        if isinstance(fields, str):
+            fields = [fields]
+        elif fields is None:
+            fields = _fields
+        if result:
+            result = [dict(zip(_fields, res)) for res in result]
+            return [{d: res[d] for d in res if d in fields} for res in result]
+        return []
+
+    def _read(
+            self,
+            domain: List[Tuple[str, str, str]] = None,
+            order: str = None,
+            limit: int = None,
+    ):
+        if domain is None:
+            domain = []
+        _fields = tuple(self.fields.values())
+
         if self:
             domain += [('id', 'in', self.ids)]
         domain = Fields.domain(domain)
@@ -235,11 +213,7 @@ class Model(base.ParkLY):
                          limit=limit,
                          )
         result = self.env.cr.execute(sql)
-        if result:
-            result = [dict(zip(_fields, res)) for res in result]
-            self.ids = copy.deepcopy([r.get('id') for r in result])
-            return [[res.get(key, False) for key in fields]for res in result]
-        return [[False for _ in fields]]
+        return result
 
     def unlink(self):
         domain = Fields.domain([('id', 'in', self.ids)])
@@ -289,7 +263,7 @@ class Model(base.ParkLY):
                 })
                 ty, plug = field.self()
                 self._fields.update({
-                    f: ty + ' '.join(plug)
+                    f: (ty, plug)
                 })
 
 
@@ -299,6 +273,7 @@ class ParkModel(base.ParkLY):
 
     model = CharField(unique=True, null=False, comment='表名')
     code = JsonField(comment='创建表Json文件')
+    model_index = JsonField(comment='创建的索引字段')
 
 
 class ExpendModel(base.ParkLY):
@@ -306,40 +281,158 @@ class ExpendModel(base.ParkLY):
 
     def _rename_table(
             self
-    ) -> Union[bool, List[Union[Tuple]]]:
-        self._table = self._name.replace('.', '_')
+    ) -> Union[bool, None, List[Union[Tuple]]]:
         if self._fields:
             models = {}
+            self.is_init = False
+            _index = []
             for f in self.fields.values():
-                self.update({'is_init': False})
                 field = eval(f'self.{f}')
                 if field and isinstance(field, ForeIgnFields):
                     if field.foreign_key in models:
                         models[field.foreign_key].append(f)
                     else:
                         models[field.foreign_key] = [f]
-            self.update({'is_init': True})
+                if field and field.index:
+                    _index.append(f)
+            self.is_init = True
             create_sql = Fields.get(mode='create table',
                                     table=self._table,
                                     vals=self._fields,
-                                    fk=models
+                                    fk=models,
                                     ).strip()
+            index_sql = Fields.create_index(fields=_index, table=self._table)
             flags = True
             if self._table != 'park_model' and self._table != 'model':
-                code = json.dumps(self._fields)
+                code = JsonField.dumps(self._fields, ensure_ascii=False)
+                _index = JsonField.dumps({i: '1' for i in _index}, ensure_ascii=False)
                 obj = self.env['park.model'].search([('model', '=', self._table)])
                 if obj:
-                    code = JsonField.loads(obj.code)
-                    code, create_sql = self.change_table(code, self._fields)
+                    code = obj.code
+                    index = obj.model_index
+                    if isinstance(index, dict):
+                        index = JsonField.dumps(index, ensure_ascii=False)
+                    if isinstance(code, dict):
+                        code = JsonField.dumps(code, ensure_ascii=False)
+                    code = JsonField.loads(code.replace('%park%', '\''))
+                    index = JsonField.loads(index.replace('%park%', '\''))
+
+                    code, _index, create_sql = self.change_table(code, self._fields, index, JsonField.loads(_index))
                     if code:
-                        code = JsonField.dumps(code)
-                        obj.write({'code': str(code)})
-                        if self.env.cr.execute(create_sql):
-                            return obj.write({'code': str(code)})
+                        code = JsonField.dumps(code, ensure_ascii=False)
+                        if self.env.cr.execute(create_sql) is not None:
+                            val = {'code': str(code).replace('\'', '%park%'),
+                                   'model_index': str(JsonField.dumps(_index,
+                                                                      ensure_ascii=False)).replace('\'', '%park%')}
+                            return obj.write(val)
                     flags = False
                 else:
                     flags = False
-                    if self.env.cr.execute(create_sql):
-                        return obj.create({'code': str(code), 'model': self._table})
+                    if self.env.cr.execute(create_sql) is not None:
+                        self.env.cr.execute(index_sql)
+                        return obj.create({'code': str(code).replace('\'', '%park%'), 'model': self._table,
+                                           'model_index': str(_index).replace('\'', '%park%')})
             if create_sql and flags and self.is_init and self._table != 'model':
-                return self.env.cr.execute(create_sql)
+                self.env.cr.execute(create_sql)
+                self.env.cr.execute(index_sql)
+                return
+
+    def change_table(
+            self,
+            old: dict,
+            new: dict,
+            o_index: dict,
+            n_index: dict
+    ) -> tuple[dict | bool, dict, bool]:
+        code = False
+        create_sql = False
+        r = {}
+        a = {}
+        d = {}
+        keys = set(new.keys()).union(set(old.keys()))
+        add_index = set(n_index.keys()).difference(o_index.keys())
+        del_index = set(o_index.keys()).difference(n_index.keys())
+        for key in keys:
+            o = old.get(key)
+            n = new.get(key)
+            d_index = []
+            a_index = []
+            attrs = []
+            if o and n and o[0] == n[0] and o[1] == n[1] and not add_index and not del_index:
+                continue
+            elif o and n and (o[0] != n[0] or o[1] != n[1]):
+                r.update({key: {}})
+                if o[0] != n[0]:
+                    r[key]['type'] = n[0]
+                if 'type' in r[key] and ParkFields.sql_type == 'mysql':
+                    attrs = n[1]
+                elif o[1] != n[1]:
+                    d_attr = set(o[1]).difference(set(n[1]))
+                    a_attr = set(n[1]).difference(set(o[1]))
+                    attrs = []
+                    for d_a in d_attr:
+                        if d_a in ['UNIQUE', 'PRIMARY KEY']:
+                            d_index.append(d_a)
+                    for a_a in a_attr:
+                        if a_a in ['UNIQUE', 'PRIMARY KEY']:
+                            a_index.append(a_a)
+                    for attr in n[1]:
+                        if attr not in ['UNIQUE', 'PRIMARY KEY']:
+                            if ParkFields.sql_type == 'mysql':
+                                r[key]['type'] = n[0]
+                            attrs.append(attr)
+
+            elif not o and n:
+                a.update({key: new.get(key)})
+            elif o and not n:
+                d.update({key: ''})
+            elif not o and not n:
+                d.update({key: ''})
+            if key in add_index and key not in d:
+                a_index.append('INDEX')
+            elif key in del_index and key not in d:
+                d_index.append('INDEX')
+            if attrs or d_index or a_index:
+                if key not in r:
+                    r.update({key: {}})
+                r[key].update({
+                    'd_index': d_index,
+                    'a_index': a_index,
+                    'attrs': attrs,
+                })
+        if r or a or d:
+            code = new
+            create_sql = ''
+            create_sql += self._alter('add', a)
+            create_sql += self._alter('del', d)
+            create_sql += self._alter('update', r)
+
+        if r and ParkFields.sql_type == 'sqlite':
+            for i in r.keys():
+                code.update({
+                    i: old.get(i)
+                })
+        return code, n_index, create_sql
+
+    def _alter(
+            self,
+            ty: str,
+            vals: Union[str, dict, tuple, list]
+    ) -> str:
+        sql = """"""
+        if ty == 'update':
+            sql = Fields.get(mode='alter update',
+                             table=self._table,
+                             vals=vals
+                             )
+        elif ty == 'add':
+            sql = Fields.get(mode='alter add',
+                             table=self._table,
+                             vals=vals
+                             )
+        elif ty == 'del':
+            sql = Fields.get(mode='alter del',
+                             table=self._table,
+                             vals=vals
+                             )
+        return sql or ''

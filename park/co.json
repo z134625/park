@@ -1,0 +1,11 @@
+{
+  "sql_type": "mysql",
+  "host": "127.0.0.1",
+  "port": 3306,
+  "user": "root",
+  "password": "park",
+  "database": "test",
+  "OPENAI_API_KEY": "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",
+  "TEMPERATURE": 0.5,
+  "MAX_TOKENS": 2048
+}

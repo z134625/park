@@ -1,0 +1,12 @@
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [Z:\park\park\parkPro\expand\base\Command.py](Command.py:Command) 
+	epoch - 97 	 : 2023-02-25 12:36:44 
+	msg: 当前迭代第1，该程序(port)执行成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	main_web - 6 	 : 2023-02-25 12:36:51 
+	msg: [http://127.0.0.1:5003/] GET : 成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	login_web - 6 	 : 2023-02-25 12:36:51 
+	msg: [http://127.0.0.1:5003/login] GET : 成功
+[Z:\park\park\parkPro\utils\env.py]-[ERROR]: [](:) 
+	login_web - 9 	 : 2023-02-25 12:36:55 
+	msg: [http://127.0.0.1:5003/login] POST : 'bool' object has no attribute 'execute'

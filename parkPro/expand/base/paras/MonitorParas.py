@@ -8,13 +8,13 @@ class MonitorParas(Paras):
     默认将添加_return 参数，
     该参数用于获取被监控方法的返回值
     """
-    ban = ['_error', 'context', '_root']
+    BAN = ['ERROR', 'context', 'ROOT']
 
     @staticmethod
     def init():
-        _error = False
-        _root = True
-        _warn = False
+        ERROR = False
+        ROOT = True
+        WARN = False
         context = _Context({
             'return_result': False,
             'funcName': None,

@@ -20,18 +20,18 @@ class Paras(_Paras):
     """
     配置基础类
     含有参数
-    _allow 默认允许 设置属性
-    _allow_set 表示允许随时修改属性 设置属性
+    ALLOW 默认允许 设置属性
+    ALLOW_SET 表示允许随时修改属性 设置属性
     """
     # 配置方法权限
-    _allow: bool = False
+    ALLOW: bool = False
     # 允许设置修改的属性
-    _allow_set: list = []
+    ALLOW_SET: list = []
     # 配置中的设置， 不允许修改的列表
-    ban: List[str] = []
+    BAN: List[str] = []
     # 默认配置中， 不允许修改的列表
-    _ban: List[str] = ['_set_list', '_obj']
-    _park_paras = True
+    _BAN: List[str] = ['_set_list', '_obj']
+    PARK_PARAS = True
 
     def __init__(
             self,
@@ -44,12 +44,12 @@ class Paras(_Paras):
         # 获取配置字典
         init = self.init()
         _init = self._init()
-        _attrs = _init.get('_attrs', {})
-        attrs = init.get('_attrs', {})
+        _attrs = _init.get('ATTRS', {})
+        attrs = init.get('ATTRS', {})
         attrs = {**attrs, **_attrs}
         set_dict = {**self._init(), **self.init()}
-        set_dict.update({'_attrs': attrs})
-        self._set_paras(allow=allow, kwargs=set_dict)
+        set_dict.update({'ATTRS': attrs})
+        self.set_paras(allow=allow, kwargs=set_dict)
 
     @staticmethod
     def init() -> dict:
@@ -60,31 +60,31 @@ class Paras(_Paras):
     def _init() -> dict:
         # 系统基础配置
         # 对象的root权限
-        _root: bool = False
+        ROOT: bool = False
         # 一些警告，默认开启
-        _warn: bool = False
+        WARN: bool = False
         # 设置属性时，是否覆盖 默认开启
-        _cover: bool = True
+        COVER: bool = True
         # 当对象获取属性时，是否报错 默认开启
-        _error: bool = True
+        ERROR: bool = True
         # 设置属性的列表， 在设置成功后将删除
-        _set_list: List[str] = []
+        SET_LIST: List[str] = []
         # 设置成功的属性和值
-        _attrs: dict = {
+        ATTRS: dict = {
             'is_save_log': True,
             'save_path': '',
-            '_save_path': '',
+            'SAVE_PATH': '',
             'save_suffix': {},
-            '_save_suffix': {
+            'SAVE_SUFFIX': {
                 'file': '',
                 'log': 'log'
             },
             'save_io': [],
-            '_save_io': {'file', 'log'},
+            'IO_TYPE': {'file', 'log'},
             'save_mode': '',
-            '_save_mode': 'w',
+            'SAVE_MODE': 'w',
             'save_encoding': '',
-            '_save_encoding': 'utf-8',
+            'SAVE_ENCODING': 'utf-8',
             'speed_info': {},
             'test_info': {},
         }
@@ -93,10 +93,10 @@ class Paras(_Paras):
         flags: _Context = _Context({})
         # 管理员权限方法
         root_func: List[str] = []
-        _obj: str = None
+        OBJ: str = None
         return locals()
 
-    def _set_paras(
+    def set_paras(
             self,
             allow: bool = True,
             kwargs: dict = None,
@@ -108,64 +108,64 @@ class Paras(_Paras):
         """
         if kwargs is None:
             kwargs = {}
-        self._allow = allow
+        self.ALLOW = allow
         try:
             if sys._getframe(1).f_code.co_name == 'update':
                 if is_obj:
-                    _obj = kwargs.get('_obj', None)
-                    kwargs = {'_obj': _obj}
+                    OBJ = kwargs.get('OBJ', None)
+                    kwargs = {'OBJ': OBJ}
                 else:
                     pop_keys = []
                     for key in kwargs.keys():
-                        if key not in self._allow_set:
+                        if key not in self.ALLOW_SET:
                             pop_keys.append(key)
                     for key in pop_keys:
                         kwargs.pop(key)
             if sys._getframe(1).f_code.co_name in ('update', '__init__'):
-                if '_attrs' in kwargs:
-                    attrs = kwargs.get('_attrs', {})
+                if 'ATTRS' in kwargs:
+                    attrs = kwargs.get('ATTRS', {})
                     if isinstance(attrs, (list, tuple)):
                         kwargs.update({
-                            '_set_list': attrs
+                            'SET_LIST': attrs
                         })
                     elif isinstance(attrs, dict):
                         kwargs.update({
-                            '_set_list': list(attrs.items())
+                            'SET_LIST': list(attrs.items())
                         })
                     sys_attrs = self._attrs if self._attrs else {}
                     if sys._getframe(1).f_code.co_name == '__init__':
-                        kwargs['_attrs'] = attrs
+                        kwargs['ATTRS'] = attrs
                     else:
-                        kwargs['_attrs'] = {**sys_attrs}
+                        kwargs['ATTRS'] = {**sys_attrs}
                 pattern = re.compile(r'^attrs_([a-zA-Z_]+)')
-                _set_list = kwargs.get('_set_list', [])
+                SET_LIST = kwargs.get('SET_LIST', [])
                 for key in kwargs.keys():
                     res = re.search(pattern, key)
                     if res:
                         attr = res.group(1)
-                        _set_list.append((attr, kwargs[key]))
-                if self._set_list:
-                    _set_list += self._set_list
-                    _set_list.reverse()
+                        SET_LIST.append((attr, kwargs[key]))
+                if self.SET_LIST:
+                    SET_LIST += self.SET_LIST
+                    SET_LIST.reverse()
                 kwargs.update({
-                    '_set_list': _set_list
+                    'SET_LIST': SET_LIST
                 })
                 setAttrs(self, warn=False, self=sel, **kwargs)
                 if sys._getframe(1).f_code.co_name == '__init__':
                     for key in kwargs.keys():
-                        if key not in self._allow_set:
-                            self._allow_set.append(key)
-                        self._allow_set = list(set(self._allow_set))
-                    for key in set(self.ban + self._ban):
-                        if key in self._allow_set:
-                            self._allow_set.remove(key)
+                        if key not in self.ALLOW_SET:
+                            self.ALLOW_SET.append(key)
+                        self.ALLOW_SET = list(set(self.ALLOW_SET))
+                    for key in set(self.BAN + self._BAN):
+                        if key in self.ALLOW_SET:
+                            self.ALLOW_SET.remove(key)
                 self._update(sel=sel)
 
         except Exception as e:
             warning(f"属性设置失败 原因：{e}", warn=True)
             raise e
         finally:
-            self._allow = False
+            self.ALLOW = False
 
     def _get_cls_dir(
             self,
@@ -176,7 +176,7 @@ class Paras(_Paras):
         """
         if obj:
             return dir(obj)
-        return self._allow_set
+        return self.ALLOW_SET
 
     def __setattr__(
             self,
@@ -188,11 +188,11 @@ class Paras(_Paras):
         若需要增加设置的属性
         则需要继承下 修改_allow_set 列表
         """
-        if key == '_allow' and sys._getframe(1).f_code.co_name != '_set_paras' or \
-                key == '_root' and sys._getframe(1).f_code.co_name != 'setAttrs':
+        if key == 'ALLOW' and sys._getframe(1).f_code.co_name != 'set_paras' or \
+                key == 'ROOT' and sys._getframe(1).f_code.co_name != 'setAttrs':
             raise AttributeError('该类不允许设置属性(%s)' % key)
-        elif key not in ('_allow', '_root'):
-            if key not in self._allow_set and not self._allow:
+        elif key not in ('ALLOW', 'ROOT'):
+            if key not in self.ALLOW_SET and not self.ALLOW:
                 raise AttributeError('该类不允许设置属性(%s)' % key)
         return super(Paras, self).__setattr__(key, value)
 
@@ -205,7 +205,7 @@ class Paras(_Paras):
         """
         更新配置的一些属性
         """
-        self._set_paras(allow=True, kwargs=kwargs, sel=sel, is_obj=is_obj)
+        self.set_paras(allow=True, kwargs=kwargs, sel=sel, is_obj=is_obj)
         return self
 
     def __getattr__(
@@ -220,14 +220,14 @@ class Paras(_Paras):
             self,
             sel: bool = False
     ) -> Union[None]:
-        if self._obj:
-            obj = env[self._obj]
+        if self.OBJ:
+            obj = env[self.OBJ]
             obj = setAttrs(obj=obj, self=sel)
             for item in obj.save_io:
-                obj._save_io.add(item)
-            obj._save_suffix.update(obj.save_suffix)
-            obj._save_path = obj.save_path if obj.save_path else obj._save_path
-            obj._save_encoding = obj.save_encoding if obj.save_encoding else obj._save_encoding
-            obj._save_mode = obj.save_mode if obj.save_mode else obj._save_mode
+                obj.IO_TYPE.add(item)
+            obj.SAVE_SUFFIX.update(obj.save_suffix)
+            obj.SAVE_PATH = obj.save_path if obj.save_path else obj.SAVE_PATH
+            obj.SAVE_ENCODING = obj.save_encoding if obj.save_encoding else obj.SAVE_ENCODING
+            obj.SAVE_MODE = obj.save_mode if obj.save_mode else obj.SAVE_MODE
             return obj
         return None

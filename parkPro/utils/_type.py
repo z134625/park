@@ -9,7 +9,7 @@ class _Paras:
     配置基础类
     仅显示公有变量属性
     """
-    ban: List[str] = []
+    BAN: List[str] = []
 
     @staticmethod
     def init() -> dict:
@@ -119,35 +119,35 @@ class _ParkLY:
 
     @property
     def is_save_log(self) -> bool:
-        return self.is_save_log
+        pass
 
     @property
     def save_path(self) -> str:
-        return self.save_path
+        pass
 
     @property
     def save_suffix(self) -> dict:
-        return self.save_suffix
+        pass
 
     @property
     def save_io(self) -> list:
-        return self.save_io
+        pass
 
     @property
     def save_mode(self) -> str:
-        return self.save_mode
+        pass
 
     @property
     def save_encoding(self) -> str:
-        return self.save_encoding
+        pass
 
     @property
     def speed_info(self) -> dict:
-        return self.speed_info
+        pass
 
     @property
     def test_info(self) -> dict:
-        return self.test_info
+        pass
 
 
 JsonType = type(json.dumps({}))

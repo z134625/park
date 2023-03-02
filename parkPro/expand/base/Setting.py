@@ -27,7 +27,7 @@ class Setting(ParkLY):
     def setting(
             self
     ) -> _Context:
-        return self._setting
+        return self.SETTING
 
     def _load_setting(
             self,
@@ -40,7 +40,7 @@ class Setting(ParkLY):
         :param kwargs:
         :return : 对象本身
         """
-        self._setting = _Context({})
+        self.SETTING = _Context({})
         if path:
             set_list = []
             _, suffix = os.path.splitext(path)
@@ -57,7 +57,7 @@ class Setting(ParkLY):
                               get_file=True
                               )
                 set_list += list(json.load(f).items())
-            elif suffix in self.paras._suffix_ini:
+            elif suffix in self.paras.SUFFIX_INI:
                 config = configparser.ConfigParser()
                 config.read(path, encoding='utf-8')
                 d = {}
@@ -83,9 +83,9 @@ class Setting(ParkLY):
                 set_list += list(d.items())
             else:
                 raise IOError(f"暂不支持该格式({suffix})配置文件")
-            self._setting.update(dict(set_list))
+            self.SETTING.update(dict(set_list))
             self.paras.update({
-                '_attrs': set_list
+                'ATTRS': set_list
             })
         return self
 
@@ -103,7 +103,7 @@ class Setting(ParkLY):
         if not content:
             if isinstance(obj, ParkLY):
                 obj.update({
-                    'setting': self.setting
+                    'SETTING': self.SETTING
                 })
                 return obj
             return self
@@ -114,5 +114,5 @@ class Setting(ParkLY):
                     setattr(obj, key, value)
                 else:
                     setattr(obj, key, value)
-            obj.paras._attrs.update(content)
+            obj.paras.ATTRS.update(content)
             return self

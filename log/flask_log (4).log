@@ -1,0 +1,24 @@
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [Z:\park\park\parkPro\expand\base\Command.py](Command.py:Command) 
+	epoch - 97 	 : 2023-02-25 12:49:58 
+	msg: 当前迭代第1，该程序(port)执行成功
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 12:50:10 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[ERROR]: [Z:\park\park\parkPro\expand\orm\ormbase.py](ormbase.py:ormbase) 
+	execute - 83 	 : 2023-02-25 12:50:21 
+	msg: (1364, "Field 'create_date' doesn't have a default value")
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 12:51:05 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[ERROR]: [Z:\park\park\parkPro\expand\orm\ormbase.py](ormbase.py:ormbase) 
+	execute - 83 	 : 2023-02-25 12:51:51 
+	msg: (1364, "Field 'create_date' doesn't have a default value")
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 12:51:51 
+	msg: [http://localhost:5003/ws] POST : 成功
+[Z:\park\park\parkPro\utils\env.py]-[ERROR]: [Z:\park\park\parkPro\expand\orm\ormbase.py](ormbase.py:ormbase) 
+	execute - 83 	 : 2023-02-25 12:52:27 
+	msg: (1364, "Field 'create_date' doesn't have a default value")
+[Z:\park\park\parkPro\utils\env.py]-[DEBUG]: [](:) 
+	ws - 6 	 : 2023-02-25 12:52:27 
+	msg: [http://localhost:5003/ws] POST : 成功

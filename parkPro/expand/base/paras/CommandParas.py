@@ -9,7 +9,7 @@ class CommandParas(Paras):
 
     @staticmethod
     def init():
-        _root = True
+        ROOT = True
         context = _Context({
             'command_info': {
                 'help': '',

@@ -5,8 +5,8 @@ from ....tools import _Context
 class FlaskBaseParas(paras.Paras):
     @staticmethod
     def init() -> dict:
-        _error = False
-        _attrs = {
+        ERROR = False
+        ATTRS = {
             'setting_path': '',
             'js_paths': [],
             'css_paths': [],

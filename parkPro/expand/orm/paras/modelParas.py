@@ -4,7 +4,7 @@ from ....utils import paras
 class modelParas(paras.Paras):
     @staticmethod
     def init() -> dict:
-        _attrs = {
+        ATTRS = {
             '_fields': {},
             'fields': {},
             'is_init': False
