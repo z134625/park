@@ -38,7 +38,7 @@ class Env(env.env.__class__):
         res.ids.clear()
         return res
 
-    def load_init(self):
+    def load(self):
         for key in self._mapping:
             self._mapping[key].init_model()
 

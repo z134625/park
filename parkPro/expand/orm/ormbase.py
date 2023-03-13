@@ -21,7 +21,7 @@ class ConnectBase(base.ParkLY):
         try:
             self._get_type_func(ty='connect_sql', key=sql_type, args=kwargs)
         except Exception as e:
-            self.env.log(e)
+            self.env.log.error(e)
             self.update({
                 'cr': None,
                 'connection': None,
@@ -30,9 +30,9 @@ class ConnectBase(base.ParkLY):
 
     def _connect_sql_sqlite3(
             self,
-            path: str,
+            **kwargs
     ) -> _ParkLY:
-        cr = sqlite3.connect(path, check_same_thread=False)
+        cr = sqlite3.connect(kwargs.get('path', None), check_same_thread=False)
         self.update({
             'cr': cr.cursor(),
             'connection': cr,
@@ -41,17 +41,13 @@ class ConnectBase(base.ParkLY):
 
     def _connect_sql_mysql(
             self,
-            user: str,
-            password: str,
-            database: str,
-            host: str,
-            port: int,
+            **kwargs
     ) -> _ParkLY:
-        cr = pymysql.Connection(user=user,
-                                password=password,
-                                database=database,
-                                host=host,
-                                port=port)
+        cr = pymysql.Connection(user=kwargs.get('user', None),
+                                password=kwargs.get('password', None),
+                                database=kwargs.get('database', None),
+                                host=kwargs.get('host', None),
+                                port=kwargs.get('port', None))
         self.update({
             'cr': cr.cursor(),
             'connection': cr,
@@ -60,17 +56,13 @@ class ConnectBase(base.ParkLY):
 
     def _connect_sql_postgresql(
             self,
-            user: str,
-            password: str,
-            database: str,
-            host: str,
-            port: int,
+            **kwargs
     ) -> _ParkLY:
-        cr = psycopg2.connect(user=user,
-                              password=password,
-                              database=database,
-                              host=host,
-                              port=port)
+        cr = psycopg2.connect(user=kwargs.get('user', None),
+                              password=kwargs.get('password', None),
+                              database=kwargs.get('database', None),
+                              host=kwargs.get('host', None),
+                              port=kwargs.get('port', None))
         self.update({
             'cr': cr.cursor(),
             'connection': cr,

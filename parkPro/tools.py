@@ -38,12 +38,23 @@ def mkdir(path: str, exist: bool = True) -> bool:
         return True
 
 
-def remove(path: str, warn=True) -> bool:
+def remove(path: str, file=True,warn=True) -> bool:
     """删除文件"""
     try:
         os.remove(path)
         return True
     except PermissionError:
+        if file:
+            def _tree_file(_p: str):
+                for _f in listPath(_p, splicing=True, mode=LISTFILE, list=False):
+                    try:
+                        os.remove(_f)
+                    except FileNotFoundError:
+                        continue
+                for _d in listPath(_p, splicing=True, mode=LISTDIR, list=False):
+                    _tree_file(_d)
+            _tree_file(path)
+            return True
         shutil.rmtree(path)
         return True
     except FileNotFoundError:

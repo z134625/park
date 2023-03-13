@@ -7,7 +7,6 @@ class FlaskBaseParas(paras.Paras):
     def init() -> dict:
         ERROR = False
         ATTRS = {
-            'setting_path': '',
             'js_paths': [],
             'css_paths': [],
             'images_path': [],

@@ -13,10 +13,11 @@ from .ParkFields import (
     ForeIgnFields,
     BoolFields
 )
-from . import ParkFields
+
 from ...utils._type import _ParkLY
 from .paras import modelParas
 from .model_env import model_env
+from .. import setting
 
 
 class Model(base.ParkLY):
@@ -43,7 +44,23 @@ class Model(base.ParkLY):
             **kwargs
     ) -> None:
         super(Model, self).init(**kwargs)
+        try:
+            if not model_env.cr:
+                info = {
+                    'host': setting.host,
+                    'port': setting.port,
+                    'user': setting.user,
+                    'password': setting.password,
+                    'database': setting.database,
+                }
+                cr = self.env['parkOrm'].connect(sql_type=setting.sql_type, **info)
+                model_env(cr=cr, E=self.env)
+        except AttributeError:
+            pass
         setattr(self, 'env', model_env)
+        self.env._mapping.update({
+            self._name: self
+        })
         self.get_fields()
 
     def init_model(self):
@@ -109,7 +126,7 @@ class Model(base.ParkLY):
             if field and field.password and f in vals:
                 vals.update({f: get_password(vals[f])})
             if isinstance(field, BoolFields) \
-                    and ParkFields.sql_type != 'postgresql' and f in vals:
+                    and getattr(setting, 'sql_type', 'sqlite') != 'postgresql' and f in vals:
                 vals.update({f: 'True' if vals[f] else 'False'})
         self.is_init = True
         update_sql = Fields.get(mode='update table',
@@ -364,7 +381,7 @@ class ExpendModel(base.ParkLY):
                 r.update({key: {}})
                 if o[0] != n[0]:
                     r[key]['type'] = n[0]
-                if 'type' in r[key] and ParkFields.sql_type == 'mysql':
+                if 'type' in r[key] and getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                     attrs = n[1]
                 elif o[1] != n[1]:
                     d_attr = set(o[1]).difference(set(n[1]))
@@ -378,7 +395,7 @@ class ExpendModel(base.ParkLY):
                             a_index.append(a_a)
                     for attr in n[1]:
                         if attr not in ['UNIQUE', 'PRIMARY KEY']:
-                            if ParkFields.sql_type == 'mysql':
+                            if getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                                 r[key]['type'] = n[0]
                             attrs.append(attr)
 
@@ -407,7 +424,7 @@ class ExpendModel(base.ParkLY):
             create_sql += self._alter('del', d)
             create_sql += self._alter('update', r)
 
-        if r and ParkFields.sql_type == 'sqlite':
+        if r and getattr(setting, 'sql_type', 'sqlite') == 'sqlite':
             for i in r.keys():
                 code.update({
                     i: old.get(i)
@@ -436,3 +453,29 @@ class ExpendModel(base.ParkLY):
                              vals=vals
                              )
         return sql or ''
+
+
+class ExpendFlask(base.ParkLY):
+    _inherit = 'flask'
+
+    @api.command(
+        keyword=['-c', '--config'],
+        name='path',
+        unique=True,
+        priority=0,
+    )
+    def path(self,
+             path: str
+             ) -> None:
+        super().path(path)
+        info = {
+            'host': setting.host,
+            'port': setting.port,
+            'user': setting.user,
+            'password': setting.password,
+            'database': setting.database,
+        }
+        cr = self.env['parkOrm'].connect(sql_type=setting.sql_type, **info)
+        self.env.load(_type='orm', show=False)
+        model_env(cr=cr, E=self.env)
+        model_env.load()

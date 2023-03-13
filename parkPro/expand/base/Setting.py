@@ -63,7 +63,7 @@ class Setting(ParkLY):
                 d = {}
                 for item in config:
                     if config.has_section(item):
-                        d[item] = dict(config.items(item))
+                        d[item] = _Context(dict(config.items(item)))
                 # self.paras._set_dict = {**self.paras._set_dict, **d}
                 set_list += list(d.items())
             elif suffix == '.txt':
@@ -106,7 +106,7 @@ class Setting(ParkLY):
                     'SETTING': self.SETTING
                 })
                 return obj
-            return self
+            return self.SETTING
         else:
             assert isinstance(content, dict)
             for key, value in content.items():

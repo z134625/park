@@ -2,11 +2,9 @@ import datetime
 import json
 import re
 from typing import Any, Union, List, Tuple
-from types import LambdaType
 
 from parkPro.utils._type import JsonType
-
-sql_type = 'sqlite'
+from .. import setting
 
 
 class Fields:
@@ -25,7 +23,7 @@ class Fields:
         self.length = kwargs.get('length', 32)
         self.index = kwargs.get('index', False)
         self.default = kwargs.get('default', None)
-        if sql_type == 'mysql':
+        if getattr(setting, 'sql_type', 'sqlite') == 'mysql':
             self.comment = kwargs.get('comment', None)
         self._index = ['unique', 'index', 'primary_key']
 
@@ -42,7 +40,7 @@ class Fields:
             sql = ""
             for field in fields:
                 if_e = ''
-                if sql_type == 'postgresql':
+                if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                     if_e = 'IF NOT EXISTS'
                 sql += """
     CREATE INDEX {if_e} {field}_index ON {table}({field});
@@ -58,7 +56,7 @@ class Fields:
             plug += ['UNIQUE']
         if not self.null:
             plug += ['NOT NULL']
-        if self.null and sql_type not in ['sqlite', 'postgresql']:
+        if self.null and getattr(setting, 'sql_type', 'sqlite') not in ['sqlite', 'postgresql']:
             plug += ['NULL']
         # if self.index:
         #     plug += ' INDEX '
@@ -66,7 +64,7 @@ class Fields:
             de = self.format(self.default)
             if de:
                 plug += ['DEFAULT %s' % de]
-        if self.comment and sql_type == 'mysql':
+        if self.comment and getattr(setting, 'sql_type', 'sqlite') == 'mysql':
             plug += ['COMMENT %s' % self.format(self.comment)]
         return ty, plug
 
@@ -121,19 +119,19 @@ class Fields:
             domain = cls.domain([('type', '=', 'table'), ('name', '=', 'test')])
             sql = cls._select(table='sqlite_master', vals=(['sql'], domain), order=order, limit=limit)
         elif mode == 'alter update':
-            if sql_type == 'sqlite':
+            if getattr(setting, 'sql_type', 'sqlite') == 'sqlite':
                 sql = ""
-            elif sql_type == 'mysql':
+            elif getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                 sql = cls._alter(ty='MODIFY', table=table, vals=vals)
-            elif sql_type == 'postgresql':
+            elif getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                 sql = cls._alter(ty='ALTER COLUMN', table=table, vals=vals)
         elif mode == 'alter add':
-            if sql_type == 'postgresql':
+            if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                 sql = cls._alter(ty='ADD COLUMN', table=table, vals=vals)
             else:
                 sql = cls._alter(ty='ADD', table=table, vals=vals)
         elif mode == 'alter del':
-            if sql_type == 'postgresql':
+            if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                 sql = cls._alter(ty='DROP COLUMN', table=table, vals=vals)
             else:
                 sql = cls._alter(ty='DROP', table=table, vals=vals)
@@ -244,7 +242,7 @@ REFERENCES {model} (id)
         d = []
         for k, v in vs.items():
             d.append((k, '=', v))
-        d = cls.domain(d, connect=',', not_1=True)
+        d = cls.domain(d)
         domain = cls.domain([('id', 'IN', ids)])
         sql = """
 UPDATE 
@@ -312,7 +310,7 @@ ALTER TABLE {table} {ty} {v};
             return sql
         for k, v in vals.items():
             k = cls.format_fields(k)
-            if sql_type == 'mysql':
+            if getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                 if v.get('type'):
                     r = [v.get('type')] + v.get('attrs', [])
                     sql += """
@@ -320,13 +318,13 @@ ALTER TABLE {table} {ty} {k} {v};
                     """.format(table=table, ty=ty, k=k, v=' '.join(r))
             else:
                 if v.get('type'):
-                    if sql_type == 'postgresql':
+                    if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                         sql += """
 ALTER TABLE {table} {ty} {k} TYPE {v};
                         """.format(table=table, ty=ty, k=k, v=v.get('type'))
                 if v.get('attrs'):
                     for a_v in v.get('attrs'):
-                        if sql_type == 'postgresql':
+                        if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                             sql += """
     ALTER TABLE {table} {ty} {k} SET {v};
                             """.format(table=table, ty=ty, k=k, v=a_v)
@@ -335,11 +333,11 @@ ALTER TABLE {table} {ty} {k} TYPE {v};
                     suffix = f'{table}_{k}_key'
                     if i == 'INDEX':
                         suffix = f'{table}_{k}_index'
-                    if sql_type == 'mysql':
+                    if getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                         sql += """
 ALTER TABLE {table} ADD INDEX {name} ({k});
                         """.format(table=table, name=suffix, k=k)
-                    elif sql_type == 'postgresql':
+                    elif getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                         index_type = ''
                         if i == 'UNIQUE':
                             index_type = 'UNIQUE'
@@ -351,11 +349,11 @@ CREATE {index_type} INDEX IF NOT EXISTS {name} ON {table}({k});
                     suffix = f'{table}_{k}_key'
                     if i == 'INDEX':
                         suffix = f'{table}_{k}_index'
-                    if sql_type == 'mysql':
+                    if getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                         sql += """
 DROP INDEX {name} ON {table};
                         """.format(table=table, name=suffix)
-                    elif sql_type == 'postgresql':
+                    elif getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
                         sql += """
 DROP INDEX IF EXISTS {name};
                         """.format(table=table, name=suffix)
@@ -387,13 +385,13 @@ DROP INDEX IF EXISTS {name};
 
     @staticmethod
     def format_fields(field):
-        if sql_type == 'postgresql':
+        if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
             return f'"{field}"'
         return f'{field}'
 
     @classmethod
     def format_table(cls, table):
-        if sql_type == 'postgresql':
+        if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
             return '"public"."%s"' % table
         return table
 
@@ -410,14 +408,14 @@ class IntegerField(Fields):
             self.null = False
         ty = 'INTEGER'
         _, plug = super(IntegerField, self).self(obj)
-        if self.auto and sql_type == 'postgresql':
+        if self.auto and getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
             ty = 'SERIAL'
         if self.primary_key:
             plug += ['PRIMARY KEY']
         if self.auto:
-            if sql_type == 'mysql':
+            if getattr(setting, 'sql_type', 'sqlite') == 'mysql':
                 plug += ['AUTO_INCREMENT']
-            elif sql_type == 'sqlite':
+            elif getattr(setting, 'sql_type', 'sqlite') == 'sqlite':
                 plug += ['AUTOINCREMENT']
         return ty, plug
 
@@ -468,7 +466,7 @@ class DatetimeField(Fields):
 
     def self(self, obj=None):
         ty = 'DATETIME'
-        if sql_type == 'postgresql':
+        if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
             ty = 'TIMESTAMP'
         _, plug = super(DatetimeField, self).self(obj)
         return ty, plug
@@ -532,7 +530,7 @@ class BoolFields(Fields):
 
     def self(self, obj=None):
         ty = 'CHAR'
-        if sql_type == 'postgresql':
+        if getattr(setting, 'sql_type', 'sqlite') == 'postgresql':
             ty = 'BOOLEAN'
         _, plug = super(BoolFields, self).self(obj)
         return ty, plug
@@ -541,7 +539,7 @@ class BoolFields(Fields):
         var = instance.fields.get(id(self))
         if var and instance.is_init:
             if var and len(instance) == 1:
-                if sql_type != 'postgresql':
+                if getattr(setting, 'sql_type', 'sqlite') != 'postgresql':
                     return eval(instance.read(var)[0][0])
                 return instance.read(var)[0][0]
             return False

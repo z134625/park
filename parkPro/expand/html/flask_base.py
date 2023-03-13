@@ -22,6 +22,7 @@ from ...utils import (
 )
 from ...tools import mkdir, remove, listPath
 from .paras import FlaskBaseParas
+from .. import setting
 
 
 class FlaskBase(base.ParkLY):
@@ -36,13 +37,11 @@ class FlaskBase(base.ParkLY):
 
     def init_setting(
             self,
-            path: str
     ) -> bool:
         if not self.paras.context.is_init:
             self.flask_init()
-            self.env['setting'].load('setting', args=(path or self.setting_path,)).give(self)
             self.context.update({
-                'app': Flask(__name__).route,
+                'app': Flask(__name__),
                 'is_init': True,
                 'old_html': '',
             })
@@ -52,7 +51,6 @@ class FlaskBase(base.ParkLY):
             return True
 
     @api.monitor(fields={api.MONITOR_ORDER_BEFORE: 'init_setting', api.MONITOR_ORDER_AFTER: 'load'},
-                 before_args=lambda x: x.setting_path,
                  after_args='images',
                  ty=api.MONITOR_FUNC,
                  order=api.MONITOR_ORDER_BEFORE)
@@ -142,7 +140,11 @@ def {func_name}(*args, **kwargs):
     def path(self,
              path: str
              ) -> None:
-        self.setting_path = path
+        obj = object()
+        settings = self.env['setting'].load('setting', args=path).give(obj)
+        for key, value in settings.items():
+            setting.var[key] = value
+        del obj
 
     def render(
             self,
