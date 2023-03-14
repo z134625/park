@@ -103,14 +103,13 @@ class RegisterEnv:
                     if item in self._mapping:
                         bases = []
                         _bases = self[item].__bases__
-                        paras = self[item].paras
                         for base in _bases:
+                            ip = base.paras
                             if base._name == cl._name:
                                 bases.append(cl)
-                                paras.inherit_update(cl.paras)
+                                ip.inherit_update(cl.paras)
                             elif base._inherit == cl._name or cl._name in base._inherit:
                                 ibs = []
-                                ip = base.paras
                                 for i_b in base.__bases__:
                                     if i_b._name == cl._name:
                                         ibs.append(cl)
@@ -119,14 +118,13 @@ class RegisterEnv:
                                         ibs.append(i_b)
                                         ip.inherit_update(i_b.paras)
                                 setattr(base, '__bases__', tuple(ibs))
-                                setattr(base, 'paras', ip)
                                 bases.append(base)
-                                paras.inherit_update(base.paras)
                             else:
                                 bases.append(base)
-                                paras.inherit_update(base.paras)
+                            setattr(base, 'paras', ip)
+                        p_paras = list(map(lambda x: x.paras, bases))
                         setattr(self[item], '__bases__', tuple(bases))
-                        setattr(self[item], 'paras', paras)
+                        self[item].paras.inherit_update(p_paras)
                     if item in self._mapping_info:
                         update_attrs(item)
 

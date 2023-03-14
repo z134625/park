@@ -26,7 +26,7 @@ class _Paras:
         """
         pass
 
-    def inherit_update(self, obj):
+    def inherit_update(self, _O):
         pass
 
 

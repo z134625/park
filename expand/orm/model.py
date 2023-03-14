@@ -456,7 +456,7 @@ class ExpendModel(base.ParkLY):
 
 
 class ExpendFlask(base.ParkLY):
-    _inherit = 'flask'
+    _inherit = 'web'
 
     @api.command(
         keyword=['-c', '--config'],

@@ -22,7 +22,6 @@ from ...utils import (
 )
 from ...tools import mkdir, remove, listPath
 from .paras import FlaskBaseParas
-from .. import setting
 
 
 class FlaskBase(base.ParkLY):
@@ -130,21 +129,6 @@ def {func_name}(*args, **kwargs):
             host: str = '127.0.0.1'
     ) -> None:
         self.context.host = host
-
-    @api.command(
-        keyword=['-c', '--config'],
-        name='path',
-        unique=True,
-        priority=0,
-    )
-    def path(self,
-             path: str
-             ) -> None:
-        obj = object()
-        settings = self.env['setting'].load('setting', args=path).give(obj)
-        for key, value in settings.items():
-            setting.var[key] = value
-        del obj
 
     def render(
             self,

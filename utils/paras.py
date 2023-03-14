@@ -27,7 +27,7 @@ class Paras(_Paras):
     # 配置方法权限
     ALLOW: bool = False
     # 允许设置修改的属性
-    ALLOW_SET: list = ['_set_dict']
+    ALLOW_SET: list = []
     # 配置中的设置， 不允许修改的列表
     BAN: List[str] = []
     # 默认配置中， 不允许修改的列表
@@ -50,7 +50,6 @@ class Paras(_Paras):
         attrs = {**attrs, **_attrs}
         set_dict = {**self._init(), **self.init()}
         set_dict.update({'ATTRS': attrs})
-        self._set_dict = set_dict
         self.set_paras(allow=allow, kwargs=set_dict)
 
     @staticmethod
@@ -234,10 +233,31 @@ class Paras(_Paras):
             return obj
         return None
 
-    def inherit_update(self, obj):
-        if isinstance(obj, Paras):
-            old = self._set_dict
-            new = obj._set_dict
-            update_changeable_var(old=old, new=new, var=['ATTRS', 'context', 'flags'])
-        else:
-            self.update(obj)
+    def inherit_update(self, _O):
+        objs = _O
+        if not isinstance(_O, (list, tuple)):
+            objs = [_O]
+        all_attrs = {}
+        _attrs = {}
+        _context = _Context()
+        _flags = {}
+        for obj in objs:
+            if isinstance(obj, Paras):
+                all_attrs.update(obj.init())
+                _attrs.update(obj.ATTRS)
+                _context.update(obj.context)
+                _flags.update(obj.flags)
+                update_changeable_var(old={'ATTRS': _attrs,
+                                           'context': _context,
+                                           'flags': _flags,
+                                           },
+                                      new=all_attrs,
+                                      var=['ATTRS', 'context', 'flags'])
+
+        old = {
+            'ATTRS': self.ATTRS,
+            'context': self.context,
+            'flags': self.flags,
+        }
+        update_changeable_var(old, all_attrs, var=['ATTRS', 'context', 'flags'])
+        self.update(all_attrs)

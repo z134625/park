@@ -8,7 +8,7 @@ from typing import (
 from .paras import Paras
 from .env import env, Io
 from .api import reckon_by_time_run
-from ..tools import _Context, update_changeable_var
+from ..tools import _Context
 
 
 def _inherit_parent(
@@ -19,56 +19,29 @@ def _inherit_parent(
     用于查找父类并从父类继承属性，
     """
     bases = []
-    all_attrs = {}
-    _attrs = {}
-    _context = _Context()
-    _flags = {}
     if isinstance(inherits, str):
         parent = env[attrs.get('_inherit')]
         if not isinstance(parent, Basics):
             parent = parent.__class__
         bases = (parent,)
-        all_attrs.update(parent.paras.init())
-        _attrs.update(parent.paras.ATTRS)
-        _context.update(parent.paras.context)
-        _flags.update(parent.paras.flags)
-        update_changeable_var(old={'ATTRS': _attrs,
-                                   'context': _context,
-                                   'flags': _flags,
-                                   },
-                              new=all_attrs,
-                              var=['ATTRS', 'context', 'flags'])
         if 'paras' in attrs and isinstance(attrs['paras'], Paras):
-            old = {**attrs['paras']._init(), **attrs['paras'].init()}
-            update_changeable_var(old, all_attrs, var=['ATTRS', 'context', 'flags'])
-            attrs['paras'].update(all_attrs)
+            attrs['paras'].inherit_update(parent.paras)
         else:
             paras = Paras()
-            paras.update(all_attrs)
+            paras.inherit_update(parent.paras)
             attrs['paras'] = paras
     elif isinstance(inherits, (tuple, list)):
         for inherit in inherits:
             parent = env[inherit]
             if not isinstance(parent, Basics):
                 parent = parent.__class__
-            all_attrs.update(parent.paras.init())
-            _attrs.update(parent.paras.ATTRS)
-            _context.update(parent.paras.context)
-            _flags.update(parent.paras.flags)
-            update_changeable_var(old={'ATTRS': _attrs,
-                                       'context': _context,
-                                       'flags': _flags,
-                                       },
-                                  new=all_attrs,
-                                  var=['ATTRS', 'context', 'flags'])
             bases += [parent]
+        p_paras = list(map(lambda x: x.paras, bases))
         if 'paras' in attrs and isinstance(attrs['paras'], Paras):
-            old = {**attrs['paras']._init(), **attrs['paras'].init()}
-            update_changeable_var(old, all_attrs, var=['ATTRS', 'context', 'flags'])
-            attrs['paras'].update(all_attrs)
+            attrs['paras'].inherit_update(p_paras)
         else:
             paras = Paras()
-            paras.update(all_attrs)
+            paras.inherit_update(p_paras)
             attrs['paras'] = paras
         bases = tuple(bases)
     return bases, attrs

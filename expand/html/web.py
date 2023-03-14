@@ -7,6 +7,7 @@ from ...utils import (
 )
 from ...tools import remove
 from .paras import WebParas
+from .. import setting
 
 
 class WebSocket(base.ParkLY):
@@ -66,4 +67,8 @@ class WebSocket(base.ParkLY):
     def path(self,
              path: str
              ) -> None:
-        self.setting_path = path
+        obj = object()
+        settings = self.env['setting'].load('setting', args=path).give(obj)
+        for key, value in settings.items():
+            setting.var[key] = value
+        del obj
