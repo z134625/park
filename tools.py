@@ -1,3 +1,4 @@
+import functools
 import os
 import re
 import shutil
@@ -40,19 +41,20 @@ def mkdir(path: str, exist: bool = True) -> bool:
 
 def remove(path: str, file=True,warn=True) -> bool:
     """删除文件"""
+
+    def _tree_file(_p: str):
+        for _f in listPath(_p, splicing=True, mode=LISTFILE, list=False):
+            try:
+                os.remove(_f)
+            except FileNotFoundError:
+                continue
+        for _d in listPath(_p, splicing=True, mode=LISTDIR, list=False):
+            _tree_file(_d)
     try:
         os.remove(path)
         return True
     except PermissionError:
         if file:
-            def _tree_file(_p: str):
-                for _f in listPath(_p, splicing=True, mode=LISTFILE, list=False):
-                    try:
-                        os.remove(_f)
-                    except FileNotFoundError:
-                        continue
-                for _d in listPath(_p, splicing=True, mode=LISTDIR, list=False):
-                    _tree_file(_d)
             _tree_file(path)
             return True
         shutil.rmtree(path)
@@ -136,6 +138,7 @@ def update_changeable_var(
     new.update(old)
 
 
+@functools.lru_cache()
 def formatSize(bytes_: Union[float, int]):
     """
     :param bytes_: 数据字节数
@@ -189,6 +192,7 @@ def get_size(item):
     return formatSize(_get_size(item))
 
 
+@functools.lru_cache()
 def readPy(file: str) -> dict:
     """
     file 为 字符串
@@ -227,14 +231,10 @@ def setAttrs(obj: Any, self: bool = False, cover: bool = True, warn: bool = True
                 if cover and obj.paras.COVER:
                     setattr(obj, key, value)
             if obj.paras.ROOT:
-                d: dict = {
-                    key: eval(f'obj.{key}')
-                }
+                d: dict = {key: eval(f'obj.{key}')}
             else:
                 obj.paras.ROOT = True
-                d: dict = {
-                    key: eval(f'obj.{key}')
-                }
+                d: dict = {key: eval(f'obj.{key}')}
                 obj.paras._root = False
             obj.paras.ATTRS.update(d)
         obj.paras.SET_LIST.clear()
@@ -290,13 +290,13 @@ def types(s, **kwargs):
     pattern3 = re.compile(r'[0-9]')
     pattern4 = re.compile(r'[^0-9a-zA-Z]')
     error = []
-    if not (kwargs.get('a_z') and re.search(pattern1, s)):
+    if kwargs.get('a_z') and not re.search(pattern1, s):
         error.append('密码必须包含字母')
-    if not (kwargs.get('A_Z') and re.search(pattern2, s)):
+    if kwargs.get('A_Z') and not re.search(pattern2, s):
         error.append('密码必须包含大写字母')
-    if not (kwargs.get('number') and re.search(pattern3, s)):
+    if kwargs.get('number') and not re.search(pattern3, s):
         error.append('密码必须包含数字')
-    if not (kwargs.get('sign') and re.search(pattern4, s)):
+    if kwargs.get('sign') and not re.search(pattern4, s):
         error.append('密码必须包含特殊符号')
     if error:
         raise ValueError('\n'.join(error))
@@ -307,21 +307,24 @@ def hard(s, **kwargs):
     return True
 
 
-def _password_check(_PWD):
-    if v_project:
-        error = []
-        for v_p in v_project:
-            try:
-                eval(v_p.get('func'))(_PWD, **v_p.get('kwargs'))
-            except Exception as e:
-                error.append(str(e))
-        if error:
-            raise ValueError('\n'.join(error))
+def _password_check(_PWD, _project=None):
+    projects = _project
+    if not projects:
+        projects = v_project
+    error = []
+    for v_p in projects:
+        try:
+            eval(v_p.get('func'))(_PWD, **v_p.get('kwargs'))
+        except Exception as e:
+            error.append(str(e))
+    if error:
+        raise ValueError('\n'.join(error))
     return True
 
 
-def get_password(pwd: str, reversal=False):
-    if _password_check(pwd):
+# @functools.lru_cache()
+def get_password(pwd: str, reversal=False, _project=None):
+    if _password_check(pwd, _project):
         if pwd_mode == 'md5':
             m = hashlib.md5()
             m.update(pwd.encode())
@@ -333,9 +336,8 @@ def get_password(pwd: str, reversal=False):
 
 
 def verification_pwd(_O, _N):
-    if get_password(_N) == _O:
-        return True
-    elif get_password(_O, reversal=True) == _O:
+    a = get_password(_N)
+    if a == _O:
         return True
     else:
         return False

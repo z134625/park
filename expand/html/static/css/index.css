@@ -53,6 +53,12 @@ input[type="text"], button {
     border-radius: 4px;
     margin-bottom: 24px;
 }
+input[type="password"], button {
+    padding: 12px 16px;
+    border: 1px solid #10a37f;
+    border-radius: 4px;
+    margin-bottom: 24px;
+}
 
 ::placeholder {
     color: #8e8ea0;

@@ -18,8 +18,7 @@ from types import (
     MethodType
 )
 
-from ._base import Basics
-from .api import _Reckon_by_time_run
+from ._base import Basics, reckon_run
 from .paras import Paras
 from ..tools import (
     mkdir,
@@ -43,6 +42,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
     root_func: List[str] = []
     paras: Paras = Paras()
     _type = 'normal'
+    _inherit_update = []
 
     def __new__(
             cls,
@@ -116,6 +116,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
         该对象不允许直接获取 以_开头的私有属性
         当开启root 权限时 即可 正常获取
         """
+        res = super(ParkLY, self).__getattribute__(item)
         call_name = sys._getframe(1).f_code.co_name
         if item.startswith('__') and item.endswith('__'):
             return super(ParkLY, self).__getattribute__(item)
@@ -132,9 +133,9 @@ class ParkLY(_ParkLY, metaclass=Basics):
                     if not self.paras.ROOT and (hasattr(res, '__self__') and not isinstance(res.__self__, ParkLY)):
                         raise AttributeError('此方法(%s)为管理员方法，不可调用' % item)
                 if 'reckon_by_time_run' in dir(res):
-                    return _Reckon_by_time_run(res).__get__(self)
+                    return reckon_run(res).__get__(self)
                 return res
-            return super(ParkLY, self).__getattribute__(item)
+            return res
         except AttributeError:
             return self.__getitem__(item)
 

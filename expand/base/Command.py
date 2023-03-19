@@ -174,6 +174,12 @@ class Command(ParkLY):
     _name = 'command'
     paras = CommandParas()
 
+    def __getattribute__(self, item):
+        res = super().__getattribute__(item)
+        if 'command_flag' in dir(res):
+            return self._command_flag(res)
+        return res
+
     def _command_flag(
             self,
             res: Union[Any]

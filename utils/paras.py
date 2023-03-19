@@ -33,6 +33,7 @@ class Paras(_Paras):
     # 默认配置中， 不允许修改的列表
     _BAN: List[str] = ['_set_list', '_obj']
     PARK_PARAS = True
+    _inherit_update = []
 
     def __init__(
             self,
@@ -91,7 +92,7 @@ class Paras(_Paras):
         }
         # 配置上下文
         context: _Context = _Context({})
-        flags: _Context = _Context({})
+        flags: _Context = _Context()
         # 管理员权限方法
         root_func: List[str] = []
         OBJ: str = None
@@ -213,8 +214,6 @@ class Paras(_Paras):
             self,
             item
     ):
-        if item in self._get_cls_dir() or item.startswith('__') and item.endswith('__'):
-            return super(Paras, self).__getattr__(item)
         return False
 
     def _update(
@@ -231,33 +230,37 @@ class Paras(_Paras):
             obj.SAVE_ENCODING = obj.save_encoding if obj.save_encoding else obj.SAVE_ENCODING
             obj.SAVE_MODE = obj.save_mode if obj.save_mode else obj.SAVE_MODE
             return obj
-        return None
 
     def inherit_update(self, _O):
+        """
+        用于更新继承下来的配置
+        _O： 为继承对象的配置对象
+        其中字典形式得到更新 默认的 有ATTRS context flags
+        若想添加则在被继承对象种增加 _inherit_update 属性，该属性值为列表形式 内部储存为 需要同步更新的字典变量名
+        """
+        base = ['ATTRS', 'context', 'flags'] + self._inherit_update
+        p_b = []
         objs = _O
         if not isinstance(_O, (list, tuple)):
             objs = [_O]
         all_attrs = {}
-        _attrs = {}
-        _context = _Context()
-        _flags = {}
-        for obj in objs:
-            if isinstance(obj, Paras):
-                all_attrs.update(obj.init())
-                _attrs.update(obj.ATTRS)
-                _context.update(obj.context)
-                _flags.update(obj.flags)
-                update_changeable_var(old={'ATTRS': _attrs,
-                                           'context': _context,
-                                           'flags': _flags,
-                                           },
-                                      new=all_attrs,
-                                      var=['ATTRS', 'context', 'flags'])
+        var = locals()
+        old = {}
+        for b in filter(lambda x: hasattr(self, x), base):
+            p_b.append(b)
+            v = eval(f'self.{b}')
+            old.update({b: v})
+            var[b] = {}
+            if isinstance(v, _Context):
+                var[b] = _Context()
+        for obj in filter(lambda x: isinstance(x, Paras), objs):
+            all_attrs.update(obj.init())
+            p_o = {}
+            for _ in p_b:
+                if hasattr(obj, _):
+                    eval(f'{_}.update(obj.{_})')
+                p_o.update({_: eval(f'{_}')})
+            update_changeable_var(p_o, all_attrs, var=p_b)
 
-        old = {
-            'ATTRS': self.ATTRS,
-            'context': self.context,
-            'flags': self.flags,
-        }
-        update_changeable_var(old, all_attrs, var=['ATTRS', 'context', 'flags'])
+        update_changeable_var(old, all_attrs, var=p_b)
         self.update(all_attrs)

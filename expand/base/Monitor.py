@@ -27,6 +27,12 @@ class Monitor(ParkLY):
     _name = 'monitor'
     paras = MonitorParas()
 
+    def __getattribute__(self, item):
+        res = super().__getattribute__(item)
+        if 'monitor_flag' in dir(res):
+            return self._monitor_flag(res)
+        return res
+
     def _monitor_flag(
             self,
             res: Union[FunctionType, MethodType]

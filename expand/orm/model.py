@@ -56,7 +56,7 @@ class Model(base.ParkLY):
                 cr = self.env['parkOrm'].connect(sql_type=setting.sql_type, **info)
                 model_env(cr=cr, E=self.env)
         except AttributeError:
-            pass
+            ...
         setattr(self, 'env', model_env)
         self.env._mapping.update({
             self._name: self
@@ -71,7 +71,7 @@ class Model(base.ParkLY):
             self.is_init = True
 
     def _delete_table(self):
-        pass
+        ...
 
     def _rename_table(
             self

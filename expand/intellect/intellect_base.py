@@ -10,7 +10,6 @@ def m(**kwargs):
 
     def p(i):
         time.sleep(0.01)
-
     bar(p, [i for i in range(1200)])
     return 1
 
@@ -35,7 +34,7 @@ class IntellectBase(base.ParkLY):
     def init_setting(
             self,
     ) -> None:
-        pass
+        ...
 
     def init_base(
             self,
@@ -57,10 +56,12 @@ class IntellectBase(base.ParkLY):
     ):
         self.a = 100
         self.b = 1000
-        # with self.progress(enum=False, epoch_show=True, log_file=None) as pg:
-        #     for i in pg(range(1)):
-        #         s = pg.epochs(func=m, bar=True)
+        with self.progress(enum=False, epoch_show=True) as pg:
+            for i in pg(range(2)):
+                s = pg.epochs(func=m, bar=True)
 
-    @functools.lru_cache()
-    def ab(self, x, y):
-        print(x - y)
+    @api.monitor(fields='ap')
+    @api.command(keyword=['--ap'], name='ab')
+    # @api.reckon_by_time_run
+    def ab(self):
+        print(1)

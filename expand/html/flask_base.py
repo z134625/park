@@ -32,7 +32,7 @@ class FlaskBase(base.ParkLY):
     def flask_init(
             self
     ):
-        pass
+        ...
 
     def init_setting(
             self,
@@ -48,6 +48,12 @@ class FlaskBase(base.ParkLY):
             self.host()
             CORS(self.context.app, resources=r'/*')
             return True
+
+    def __getattribute__(self, item):
+        res = super().__getattribute__(item)
+        if 'flask_route_flag' in dir(res):
+            return self._flask_route_flag(res)
+        return res
 
     @api.monitor(fields={api.MONITOR_ORDER_BEFORE: 'init_setting', api.MONITOR_ORDER_AFTER: 'load'},
                  after_args='images',
@@ -98,37 +104,6 @@ def {func_name}(*args, **kwargs):
         finally:
             self.save('log', args=('flask_log',))
             self.delete_cache()
-
-    def delete_cache(
-            self
-    ):
-        for file in self.context.cache_files:
-            if os.path.exists(file):
-                remove(file)
-
-    @api.command(
-        keyword=['-p', '--port'],
-        name='port',
-        unique=True,
-        priority=0
-    )
-    def port(
-            self,
-            port: int = 5000
-    ) -> None:
-        self.context.port = int(port)
-
-    @api.command(
-        keyword=['-h', '--host'],
-        name='host',
-        unique=True,
-        priority=0,
-    )
-    def host(
-            self,
-            host: str = '127.0.0.1'
-    ) -> None:
-        self.context.host = host
 
     def render(
             self,

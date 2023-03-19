@@ -1,3 +1,4 @@
+import functools
 import sys
 import logging
 from collections.abc import Iterable
@@ -37,6 +38,7 @@ class RegisterEnv:
         }
         self.log = logging
 
+    @functools.lru_cache()
     def init_log_config(
             self,
             level: int,

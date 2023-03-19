@@ -16,7 +16,7 @@ class SettingParas(Paras):
     _suffix  文件后缀
     context  上下文信息， 默认字典形式
     """
-    BAN = ['_suffix_ini', 'root_func']
+    BAN = ['SUFFIX_INI', 'root_func']
 
     @staticmethod
     def init() -> dict:
@@ -25,5 +25,7 @@ class SettingParas(Paras):
         """
         ERROR: bool = False
         SUFFIX_INI: Tuple[str, str, str] = ('.ini', '.cfg', '.conf')
-        SETTING = _Context({})
+        ATTRS = {
+            'SETTING': _Context({})
+        }
         return locals()

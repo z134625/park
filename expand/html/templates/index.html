@@ -26,6 +26,11 @@
     {% else %}
     <form action="/login" method="post">
         <input type="text" name="username" placeholder="输入用户名" required/>
+        <input type="password" name="password" placeholder="输入密码" required/>
+        {% if error %}
+        <p>{{ error }}</p>
+        {% else %}
+        {% endif %}
         {% if login_error %}
         <input type="submit" value="重新登录"/>
         {% else %}
