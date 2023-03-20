@@ -1,5 +1,5 @@
-from ....tools import _Context
-from ....utils.paras import Paras
+from ...tools import _Context
+from ...utils.paras import Paras
 
 
 class ToolsParas(Paras):

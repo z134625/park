@@ -1,6 +1,6 @@
 import datetime
-from ....utils.paras import Paras
-from ....tools import _Context
+from ...utils.paras import Paras
+from ...tools import _Context
 
 
 class RealTimeUpdateParas(Paras):

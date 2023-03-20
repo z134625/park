@@ -1,10 +1,9 @@
-from typing import Union
-
 from . import ormbase
 from . import model
 from .model_env import model_env
-from ...utils.env import RegisterEnv
-from .. import setting
+from typing import Union
+from parkPro.utils.env import RegisterEnv
+from parkPro import setting
 
 
 def load(

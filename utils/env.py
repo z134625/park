@@ -13,6 +13,7 @@ from typing import (
 
 from ..tools import warning
 from ._type import _ParkLY
+from .. import setting
 
 
 class RegisterEnv:
@@ -151,9 +152,10 @@ class RegisterEnv:
 
     def load(
             self,
+            path: str = None,
             level: Union[None, int] = None,
-            _type: str = None,
-            show: bool = True
+            show: bool = True,
+            _type: str = 'normal',
     ) -> None:
         for key in self._mapping:
             if getattr(self._mapping[key], '_park_Basics'):
@@ -163,6 +165,12 @@ class RegisterEnv:
                 else:
                     self._mapping[key]()
         self.log = self.init_log_config(level, show)
+        if path:
+            obj = object()
+            settings = self['setting'].load('setting', args=(path,)).give(obj)
+            for key, value in settings.items():
+                setting.var[key] = value
+            del obj
 
     def clear(
             self

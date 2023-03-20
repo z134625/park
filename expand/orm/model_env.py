@@ -1,6 +1,6 @@
 
 from .ormbase import ConnectBase
-from ...utils import env
+from parkPro.utils import env
 
 
 class Env(env.env.__class__):

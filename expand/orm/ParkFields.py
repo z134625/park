@@ -4,7 +4,7 @@ import re
 from typing import Any, Union, List, Tuple
 
 from parkPro.utils._type import JsonType
-from .. import setting
+from parkPro import setting
 
 
 class Fields:

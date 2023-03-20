@@ -6,9 +6,9 @@ from multiprocessing import Process
 import psutil
 
 from .paras import RealTimeUpdateParas
-from ...utils import api
-from ...utils.api import MONITOR_FUNC
-from ...utils.base import ParkLY
+from ..utils import api
+from ..utils.api import MONITOR_FUNC
+from ..utils.base import ParkLY
 
 
 class RealTimeUpdate(ParkLY):

@@ -1,5 +1,5 @@
-from ....utils.paras import Paras
-from ....tools import _Context
+from ...utils.paras import Paras
+from ...tools import _Context
 
 
 class CommandParas(Paras):

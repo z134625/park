@@ -1,7 +1,7 @@
 import functools
 import time
 
-from ...utils import base, api
+from parkPro.utils import base, api
 from .paras import IntellectParas
 
 

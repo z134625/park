@@ -1,13 +1,13 @@
 
 import os
 
-from ...utils import (
+from parkPro.utils import (
     base,
     api
 )
-from ...tools import remove
+from parkPro.tools import remove
 from .paras import WebParas
-from .. import setting
+from parkPro import setting
 
 
 class WebSocket(base.ParkLY):

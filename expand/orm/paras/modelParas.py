@@ -1,4 +1,4 @@
-from ....utils import paras
+from parkPro.utils import paras
 
 
 class modelParas(paras.Paras):

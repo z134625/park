@@ -231,7 +231,10 @@ class Paras(_Paras):
             obj.SAVE_MODE = obj.save_mode if obj.save_mode else obj.SAVE_MODE
             return obj
 
-    def inherit_update(self, _O):
+    def inherit_update(
+            self,
+            _O: _Paras
+    ) -> None:
         """
         用于更新继承下来的配置
         _O： 为继承对象的配置对象

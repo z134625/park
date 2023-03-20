@@ -4,9 +4,9 @@ from typing import Any, Union, List, Tuple
 import pymysql
 import psycopg2
 
-from ...utils import base
+from parkPro.utils import base
 from .paras import ormParas
-from ...utils._type import _ParkLY
+from parkPro.utils._type import _ParkLY
 
 
 class ConnectBase(base.ParkLY):

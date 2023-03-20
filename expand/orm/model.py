@@ -1,8 +1,8 @@
 import copy
 from typing import Tuple, Union, List, Any
 
-from ...tools import get_password
-from ...utils import base, api, env
+from parkPro.tools import get_password
+from parkPro.utils import base, api, env
 
 from .ParkFields import (
     Fields,
@@ -14,10 +14,10 @@ from .ParkFields import (
     BoolFields
 )
 
-from ...utils._type import _ParkLY
+from parkPro.utils._type import _ParkLY
 from .paras import modelParas
 from .model_env import model_env
-from .. import setting
+from parkPro import setting
 
 
 class Model(base.ParkLY):
