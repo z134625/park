@@ -20,7 +20,7 @@ from parkPro.utils import (
     base,
     api
 )
-from parkPro.tools import mkdir, remove, listPath
+from parkPro.tools import mkdir, exists_rename, listPath
 from .paras import FlaskBaseParas
 
 
@@ -146,7 +146,7 @@ def {func_name}(*args, **kwargs):
         if not os.path.exists(base_name):
             self.open(base_name, mode='w', datas=html)
         if html != self.context.old_html:
-            base_name = self.exists_rename(base_name)
+            base_name = exists_rename(base_name)
             self.open(base_name, mode='w', datas=html)
         if base_name not in self.cache_path and self.cache_path != 'all':
             self.context.cache_files.append(base_name)

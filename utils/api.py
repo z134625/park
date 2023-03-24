@@ -1,7 +1,8 @@
 from types import (
     MethodType,
     FunctionType,
-    LambdaType
+    LambdaType,
+    ModuleType
 )
 from typing import (
     Union,
@@ -98,24 +99,14 @@ def reckon_by_time_run(
     return func
 
 
-# def flask_route(
-#         *args,
-#         **kwargs
-# ) -> Optional[Callable]:
-#     """
-#
-#     """
-#
-#     def warp(
-#             func: Optional[Callable]
-#     ) -> Optional[Callable]:
-#         setattr(func, 'flask_route_flag', {
-#             'args': args,
-#             'kwargs': kwargs,
-#         })
-#         return func
-#
-#     return warp
-
-
 apis = locals()
+
+
+def api_register(api_func):
+    if callable(api_func):
+        apis[api_func.__name__] = api_func
+        return
+    if isinstance(api_func, ModuleType):
+        for f in dir(api_func):
+            if callable(eval(f'api_func.{f}')) and not f.startswith('__') and not f.endswith('__'):
+                apis[f] = eval(f'api_func.{f}')

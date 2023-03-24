@@ -5,7 +5,8 @@ from . import (
     Monitor,
     RealTimeUpdate,
     Setting,
-    Tools
+    Tools,
+    Spider
 )
 
 from ..utils.env import RegisterEnv
@@ -22,7 +23,7 @@ def load(
     _load = []
     for key in self._mapping:
         _class = self._mapping[key]
-        if callable(_class) and getattr(_class, '_type', None) == 'normal':
+        if not _class._obj and getattr(_class, '_type', None) == 'normal':
             self._mapping[key]()
         else:
             _load.append(self._mapping[key])

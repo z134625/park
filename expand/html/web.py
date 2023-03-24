@@ -72,3 +72,5 @@ class WebSocket(base.ParkLY):
         for key, value in settings.items():
             setting.var[key] = value
         del obj
+        # expands_register()
+        self.env.load()

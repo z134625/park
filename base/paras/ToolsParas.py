@@ -7,14 +7,6 @@ class ToolsParas(Paras):
     @staticmethod
     def init():
         context = _Context({
-            '_': 1,
-            'method': 'GET',
-            '_method': 'GET',
-            'url': '',
-            '_url': '',
-            'error_url': [],
-            'items': {},
-            'headers': {},
             'number_dict': {
                 '0': '零',
                 '1': '壹',

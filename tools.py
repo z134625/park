@@ -6,11 +6,14 @@ import sys
 import warnings
 import hashlib
 
-from typing import Union, List, Any, Tuple
+from typing import Union, List, Any, Tuple, Iterable
 
 LISTFILE = 0
 LISTDIR = 1
 LISTALL = 2
+pwd_mode = 'md5'
+v_project = [
+]
 
 
 def warning(msg: str, warn: bool = True,
@@ -39,7 +42,7 @@ def mkdir(path: str, exist: bool = True) -> bool:
         return True
 
 
-def remove(path: str, file=True,warn=True) -> bool:
+def remove(path: str, file=True, warn=True) -> bool:
     """删除文件"""
 
     def _tree_file(_p: str):
@@ -50,6 +53,7 @@ def remove(path: str, file=True,warn=True) -> bool:
                 continue
         for _d in listPath(_p, splicing=True, mode=LISTDIR, list=False):
             _tree_file(_d)
+
     try:
         os.remove(path)
         return True
@@ -343,6 +347,139 @@ def verification_pwd(_O, _N):
         return False
 
 
-pwd_mode = 'md5'
-v_project = [
-]
+def _generate_name(
+        name: str,
+        names: Iterable,
+        mode: int = 0,
+        dif: bool = False,
+        suffix: bool = '',
+) -> str:
+    if mode == 1:
+        name, suffix = os.path.splitext(name)
+        names = list(
+            map(lambda x: os.path.splitext(x)[0], filter(lambda x: os.path.splitext(x)[1] == suffix, names)))
+    if name in names:
+        start = ' (1)'
+        pattern_number = re.compile(r'.* \((\d+)\)')
+        pattern_letter = re.compile(r'.* \(([A-Z]+)\)')
+        pattern = pattern_number
+        if dif:
+            start = ' (A)'
+            pattern = pattern_letter
+        number = re.match(pattern=pattern, string=name)
+        if number:
+            number = number.group(1)
+            if not dif:
+                new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
+            else:
+                if not number.endswith('Z'):
+                    new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number[:-1] + chr(ord(number[-1]) + 1)), name)
+                else:
+                    new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number + 'A'), name)
+        else:
+            new_name = name + start
+        if new_name in names:
+            return _generate_name(new_name, names, mode=0, dif=dif, suffix=suffix)
+        return new_name + suffix
+    return name + suffix
+
+
+def exists_rename(
+        path: str,
+        paths: List[str] = None,
+        clear: bool = False,
+        dif: bool = False) -> str:
+    if not clear:
+        if os.path.isdir(path):
+            if path.endswith('/'):
+                path = path[:-1]
+            names = listPath(path=os.path.dirname(path), splicing=False, list=True)
+            return os.path.join(os.path.dirname(path), _generate_name(name=os.path.basename(path),
+                                                                      names=names, dif=dif))
+        if os.path.isfile(path):
+            names = listPath(path=os.path.dirname(path), splicing=False, list=True)
+            return os.path.join(os.path.dirname(path), _generate_name(name=os.path.basename(path),
+                                                                      names=names, mode=1, dif=dif))
+        else:
+            names = []
+            if paths:
+                names = paths
+            return _generate_name(name=path, names=names, dif=dif)
+    else:
+        name, suffix = os.path.splitext(path)
+        pattern = re.compile(r'(.*) \([0-9]+\)')
+        res = re.search(pattern=pattern, string=name)
+        if res:
+            name_head = res.group(1)
+            return name_head + suffix
+        else:
+            return path
+
+
+def number_to_chinese(
+        amount: Union[int, float, str]
+) -> str:
+    c_dict = {1: u'', 2: u'拾', 3: u'佰', 4: u'仟'}
+    x_dict = {1: u'元', 2: u'万', 3: u'亿', 4: u'兆'}
+    g_dict = {0: u'零', 1: u'壹', 2: u'贰', 3: u'叁', 4: u'肆', 5: u'伍', 6: u'陆', 7: '柒', 8: '捌', 9: '玖'}
+
+    def number_split(number):
+        g = len(number) % 4
+        number_list = []
+        lx = len(number) - 1
+        if g > 0:
+            number_list.append(number[0:g])
+        k = g
+        while k <= lx:
+            number_list.append(number[k:k + 4])
+            k += 4
+        return number_list
+
+    def number_to_capital(number):
+        len_number = len(number)
+        j = len_number
+        big_num = ''
+        for i in range(len_number):
+            if number[i] == '-':
+                big_num += '负'
+            elif int(number[i]) == 0:
+                if i < len_number - 1:
+                    if int(number[i + 1]) != 0:
+                        big_num += g_dict[int(number[i])]
+            else:
+                big_num += g_dict[int(number[i])] + c_dict[j]
+            j -= 1
+        return big_num
+
+    number = str(amount).split('.')
+    integer_part = number[0]
+    chinese = ''
+    integer_part_list = number_split(integer_part)
+    integer_len = len(integer_part_list)
+    for i in range(integer_len):
+        if number_to_capital(integer_part_list[i]) == '':
+            chinese += number_to_capital(integer_part_list[i])
+        else:
+            chinese += number_to_capital(integer_part_list[i]) + x_dict[integer_len - i]
+    if chinese and '元' not in chinese:
+        chinese += '元'
+    if chinese and len(number) == 1:
+        chinese += '整'
+    else:
+        fractional_part = number[1]
+        fractional_len = len(fractional_part)
+        if fractional_len == 1:
+            if int(fractional_part[0]) == 0:
+                chinese += '整'
+            else:
+                chinese += g_dict[int(fractional_part[0])] + '角整'
+        else:
+            if int(fractional_part[0]) == 0 and int(fractional_part[1]) != 0:
+                chinese += '零' + g_dict[int(fractional_part[1])] + '分'
+            elif int(fractional_part[0]) == 0 and int(fractional_part[1]) == 0:
+                chinese += '整'
+            elif int(fractional_part[0]) != 0 and int(fractional_part[1]) != 0:
+                chinese += g_dict[int(fractional_part[0])] + '角' + g_dict[int(fractional_part[1])] + '分'
+            else:
+                chinese += g_dict[int(fractional_part[0])] + '角整'
+    return chinese

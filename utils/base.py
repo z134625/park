@@ -4,7 +4,7 @@ import os
 import pickle
 import re
 import sys
-from collections.abc import Iterable
+
 from typing import (
     List,
     Union,
@@ -24,11 +24,11 @@ from ..tools import (
     mkdir,
     warning,
     _Context,
-    listPath,
+    exists_rename,
     args_tools
 )
 from .env import env
-from ._type import _ParkLY
+from . import _ParkLY
 
 
 class ParkLY(_ParkLY, metaclass=Basics):
@@ -43,6 +43,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
     paras: Paras = Paras()
     _type = 'normal'
     _inherit_update = []
+    _obj = False
 
     def __new__(
             cls,
@@ -84,6 +85,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
         self.env._mapping.update({
             self._name: self
         })
+        self._obj = True
         for f in dir(self):
             eval(f'self.{f}')
 
@@ -251,7 +253,7 @@ class ParkLY(_ParkLY, metaclass=Basics):
             file = os.path.join(save_path, name +
                                 (f'.{self.SAVE_SUFFIX.get(key)}' if self.SAVE_SUFFIX.get(
                                     key) else self.SAVE_SUFFIX.get(key, '')))
-            file = self.exists_rename(file)
+            file = exists_rename(file)
             mode = self.SAVE_MODE
             if isinstance(value, bytes):
                 mode = self.SAVE_MODE + 'b'
@@ -428,72 +430,3 @@ class ParkLY(_ParkLY, metaclass=Basics):
             pickle_data = pickle.load(f)
             return pickle_data
         return self.paras.ATTRS
-
-    def exists_rename(
-            self,
-            path: str,
-            paths: List[str] = None,
-            clear: bool = False,
-            dif: bool = False) -> str:
-        if not clear:
-            if os.path.isdir(path):
-                if path.endswith('/'):
-                    path = path[:-1]
-                names = listPath(path=os.path.dirname(path), splicing=False, list=True)
-                return os.path.join(os.path.dirname(path), self.generate_name(name=os.path.basename(path),
-                                                                              names=names, dif=dif))
-            if os.path.isfile(path):
-                names = listPath(path=os.path.dirname(path), splicing=False, list=True)
-                return os.path.join(os.path.dirname(path), self.generate_name(name=os.path.basename(path),
-                                                                              names=names, mode=1, dif=dif))
-            else:
-                names = []
-                if paths:
-                    names = paths
-                return self.generate_name(name=path, names=names, dif=dif)
-        else:
-            name, suffix = os.path.splitext(path)
-            pattern = re.compile(r'(.*) \([0-9]+\)')
-            res = re.search(pattern=pattern, string=name)
-            if res:
-                name_head = res.group(1)
-                return name_head + suffix
-            else:
-                return path
-
-    def generate_name(
-            self,
-            name: str,
-            names: Iterable,
-            mode: int = 0,
-            dif: bool = False,
-            suffix: bool = '',
-    ) -> str:
-        if mode == 1:
-            name, suffix = os.path.splitext(name)
-            names = list(
-                map(lambda x: os.path.splitext(x)[0], filter(lambda x: os.path.splitext(x)[1] == suffix, names)))
-        if name in names:
-            start = ' (1)'
-            pattern_number = re.compile(r'.* \((\d+)\)')
-            pattern_letter = re.compile(r'.* \(([A-Z]+)\)')
-            pattern = pattern_number
-            if dif:
-                start = ' (A)'
-                pattern = pattern_letter
-            number = re.match(pattern=pattern, string=name)
-            if number:
-                number = number.group(1)
-                if not dif:
-                    new_name = re.sub(r'\(\d+\)$', '(%d)' % (int(number) + 1), name)
-                else:
-                    if not number.endswith('Z'):
-                        new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number[:-1] + chr(ord(number[-1]) + 1)), name)
-                    else:
-                        new_name = re.sub(r'\([A-Z]+\)$', '(%s)' % (number + 'A'), name)
-            else:
-                new_name = name + start
-            if new_name in names:
-                return self.generate_name(new_name, names, mode=0, dif=dif, suffix=suffix)
-            return new_name + suffix
-        return name + suffix

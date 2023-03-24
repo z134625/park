@@ -12,7 +12,7 @@ from typing import (
 )
 
 from ..tools import warning
-from ._type import _ParkLY
+from . import _ParkLY
 from .. import setting
 
 
@@ -160,7 +160,7 @@ class RegisterEnv:
         for key in self._mapping:
             if getattr(self._mapping[key], '_park_Basics'):
                 _class = self._mapping[key]
-                if _type and getattr(_class, '_type', None) == _type:
+                if not _class._obj and _type and getattr(_class, '_type', None) == _type:
                     self._mapping[key]()
                 else:
                     self._mapping[key]()

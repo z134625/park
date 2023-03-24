@@ -3,7 +3,7 @@ import json
 import re
 from typing import Any, Union, List, Tuple
 
-from parkPro.utils._type import JsonType
+from parkPro.utils import JsonType
 from parkPro import setting
 
 

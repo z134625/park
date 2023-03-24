@@ -14,7 +14,7 @@ from .ParkFields import (
     BoolFields
 )
 
-from parkPro.utils._type import _ParkLY
+from parkPro.utils import _ParkLY
 from .paras import modelParas
 from .model_env import model_env
 from parkPro import setting

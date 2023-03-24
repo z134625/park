@@ -6,7 +6,7 @@ import psycopg2
 
 from parkPro.utils import base
 from .paras import ormParas
-from parkPro.utils._type import _ParkLY
+from parkPro.utils import _ParkLY
 
 
 class ConnectBase(base.ParkLY):

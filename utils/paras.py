@@ -14,7 +14,7 @@ from ..tools import (
     update_changeable_var,
 )
 from .env import env
-from ._type import _Paras
+from . import _Paras
 
 
 class Paras(_Paras):
